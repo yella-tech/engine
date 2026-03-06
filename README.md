@@ -1,5 +1,6 @@
 # @yella/engine
 
+[![CI](https://github.com/yella-tech/engine/actions/workflows/ci.yml/badge.svg)](https://github.com/yella-tech/engine/actions/workflows/ci.yml)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
 Durable TypeScript runtime for agents and automations. Effects store their results, retries pick up where you left off.
