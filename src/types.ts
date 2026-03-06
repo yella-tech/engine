@@ -191,7 +191,7 @@ export type HandlerContext<T = unknown> = {
   correlationId: string
   /**
    * Mutable key-value context shared across the correlation chain.
-   * Deep-copied via `structuredClone` on each handler invocation — direct mutations
+   * Deep-copied via `structuredClone` on each handler invocation, direct mutations
    * to nested objects will not persist. Use {@link setContext} to persist changes.
    */
   context: Record<string, unknown>
@@ -266,7 +266,7 @@ export type ProcessContext<T = unknown> = {
   correlationId: string
   /**
    * Mutable key-value context shared across the correlation chain.
-   * Deep-copied via `structuredClone` on each handler invocation — direct mutations
+   * Deep-copied via `structuredClone` on each handler invocation, direct mutations
    * to nested objects will not persist. Use {@link setContext} to persist changes.
    */
   context: Record<string, unknown>
