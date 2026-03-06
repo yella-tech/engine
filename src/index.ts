@@ -90,7 +90,7 @@ function buildStores(opts: EngineOptions): { runStore: RunStore; effectStore: Ef
  *
  * @example
  * ```ts
- * import { createEngine } from '@yella/engine'
+ * import { createEngine } from '@yellatech/engine'
  *
  * const engine = createEngine({ concurrency: 5 })
  *

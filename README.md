@@ -1,4 +1,4 @@
-# @yella/engine
+# @yellatech/engine
 
 [![CI](https://github.com/yella-tech/engine/actions/workflows/ci.yml/badge.svg)](https://github.com/yella-tech/engine/actions/workflows/ci.yml)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
@@ -12,13 +12,13 @@ No platform. No infrastructure. One SQLite file. Just a library you import.
 ## Install
 
 ```bash
-npm install @yella/engine
+npm install @yellatech/engine
 ```
 
 ## Quick Start
 
 ```typescript
-import { createEngine } from '@yella/engine'
+import { createEngine } from '@yellatech/engine'
 
 const engine = createEngine({ store: { path: './agent.db' } })
 

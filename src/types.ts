@@ -3,7 +3,7 @@
  *
  * @example
  * ```ts
- * import { ErrorCode } from '@yella/engine'
+ * import { ErrorCode } from '@yellatech/engine'
  * if (err.code === ErrorCode.HANDLER_TIMEOUT) { ... }
  * ```
  */
