@@ -1,6 +1,6 @@
 {
   "name": "@yella/engine",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "description": "Durable TypeScript runtime for agents and automations. Effects store their results, retries pick up where you left off.",
   "main": "dist/index.js",
   "exports": {
@@ -9,7 +9,11 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "LICENSE", "README.md"],
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
     "postbuild": "cp -r src/server/public dist/server/public",
