@@ -461,7 +461,7 @@ export type EngineOptions = {
   onDead?: (run: Run, error: string) => void
   /** Called when a run transitions to `running`. */
   onRunStart?: (run: Run) => void
-  /** Called when a run transitions to `completed`. */
+  /** Called when a run finishes, regardless of outcome (`completed` or `errored`). */
   onRunFinish?: (run: Run) => void
   /** Called when a run transitions to `errored`. */
   onRunError?: (run: Run, error: string) => void
