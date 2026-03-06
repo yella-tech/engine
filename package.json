@@ -1,7 +1,7 @@
 {
   "name": "@yella/engine",
-  "version": "1.0.0",
-  "description": "Crash-proof background jobs for TypeScript. Side effects run once, retries skip what already worked.",
+  "version": "0.13.0",
+  "description": "Durable TypeScript runtime for agents and automations. Effects store their results, retries pick up where you left off.",
   "main": "dist/index.js",
   "exports": {
     ".": {
