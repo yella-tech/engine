@@ -491,7 +491,13 @@ export interface Engine {
    * @param handler - The handler function receiving validated payloads.
    * @param opts - Optional retry policy, version, and singleton flag.
    */
-  register<T>(name: string, eventName: string, schema: Schema<T>, handler: (ctx: HandlerContext<T>) => Promise<HandlerResult> | HandlerResult, opts?: { retry?: RetryPolicy; version?: string; singleton?: boolean }): void
+  register<T>(
+    name: string,
+    eventName: string,
+    schema: Schema<T>,
+    handler: (ctx: HandlerContext<T>) => Promise<HandlerResult> | HandlerResult,
+    opts?: { retry?: RetryPolicy; version?: string; singleton?: boolean },
+  ): void
 
   /**
    * Register a process using a single config object with named parameters.

@@ -204,10 +204,15 @@ function engineTests(label: string, opts: EngineOptions) {
 
     it('singleton process: skips events while first is active', async () => {
       engine = createEngine(opts)
-      engine.register('proc', 'evt', async () => {
-        await new Promise((r) => setTimeout(r, 50))
-        return { success: true }
-      }, { singleton: true })
+      engine.register(
+        'proc',
+        'evt',
+        async () => {
+          await new Promise((r) => setTimeout(r, 50))
+          return { success: true }
+        },
+        { singleton: true },
+      )
 
       const runs1 = engine.emit('evt', null)
       const runs2 = engine.emit('evt', null) // should be skipped

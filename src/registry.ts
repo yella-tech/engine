@@ -12,20 +12,8 @@ export function createRegistry() {
   type RegisterOpts = { retry?: RetryPolicy; version?: string; singleton?: boolean }
 
   function register(name: string, eventName: string, handler: Handler, opts?: RegisterOpts): void
-  function register<T>(
-    name: string,
-    eventName: string,
-    schema: Schema<T>,
-    handler: (ctx: HandlerContext<T>) => Promise<HandlerResult> | HandlerResult,
-    opts?: RegisterOpts,
-  ): void
-  function register(
-    name: string,
-    eventName: string,
-    schemaOrHandler: Schema | Handler,
-    maybeHandlerOrOpts?: Handler | RegisterOpts,
-    maybeOpts?: RegisterOpts,
-  ): void {
+  function register<T>(name: string, eventName: string, schema: Schema<T>, handler: (ctx: HandlerContext<T>) => Promise<HandlerResult> | HandlerResult, opts?: RegisterOpts): void
+  function register(name: string, eventName: string, schemaOrHandler: Schema | Handler, maybeHandlerOrOpts?: Handler | RegisterOpts, maybeOpts?: RegisterOpts): void {
     if (byName.has(name)) throw new EngineError(ErrorCode.PROCESS_ALREADY_REGISTERED, `Process already registered: ${name}`)
 
     let handler: Handler

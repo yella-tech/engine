@@ -128,13 +128,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     onRunError: opts.onRunError,
     onInternalError: opts.onInternalError,
   })
-  const dispatcher = createDispatcher(
-    runStore,
-    bus.executeRun,
-    concurrency,
-    { leaseOwner, leaseTimeoutMs, heartbeatIntervalMs },
-    opts.onInternalError,
-  )
+  const dispatcher = createDispatcher(runStore, bus.executeRun, concurrency, { leaseOwner, leaseTimeoutMs, heartbeatIntervalMs }, opts.onInternalError)
   let acceptingEvents = true
 
   // Start dev server in background if configured

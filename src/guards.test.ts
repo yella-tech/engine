@@ -170,10 +170,15 @@ describe('singleton process', () => {
 
       it('skips second emit while first is active', async () => {
         engine = createEngine(opts)
-        engine.register('slow', 'evt', async () => {
-          await new Promise((r) => setTimeout(r, 50))
-          return { success: true }
-        }, { singleton: true })
+        engine.register(
+          'slow',
+          'evt',
+          async () => {
+            await new Promise((r) => setTimeout(r, 50))
+            return { success: true }
+          },
+          { singleton: true },
+        )
 
         const first = engine.emit('evt', 'a')
         const second = engine.emit('evt', 'b')
@@ -201,10 +206,15 @@ describe('singleton process', () => {
 
       it('only the singleton process is skipped, non-singleton on same event still fires', async () => {
         engine = createEngine(opts)
-        engine.register('procA', 'evt', async () => {
-          await new Promise((r) => setTimeout(r, 100))
-          return { success: true }
-        }, { singleton: true })
+        engine.register(
+          'procA',
+          'evt',
+          async () => {
+            await new Promise((r) => setTimeout(r, 100))
+            return { success: true }
+          },
+          { singleton: true },
+        )
         engine.register('procB', 'evt', async () => ({ success: true }))
 
         const first = engine.emit('evt', 'x')
