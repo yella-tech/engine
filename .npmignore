@@ -1,5 +1,6 @@
 src/
-*.test.ts
+**/*.test.*
+**/*.map
 coverage/
 examples/
 *.db*
@@ -9,3 +10,4 @@ DURABLE_RUNTIME_PLAN.md
 tsconfig.json
 .prettierrc
 vitest.config.*
+package-lock.json
