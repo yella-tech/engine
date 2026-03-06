@@ -468,7 +468,7 @@ export type EngineOptions = {
  * The engine instance returned by {@link createEngine}.
  *
  * The engine is an always-on runtime that processes events as long as the host
- * application is running. It does not exit on its own — call {@link stop} to
+ * application is running. It does not exit on its own, call {@link stop} to
  * tear down timers and release resources. For script-style usage, use
  * {@link drain} followed by {@link stop} to wait for completion and then exit.
  */

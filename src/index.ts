@@ -73,7 +73,7 @@ function buildStores(opts: EngineOptions): { runStore: RunStore; effectStore: Ef
  *
  * The engine is a long-lived runtime designed to be embedded in your application
  * process (e.g. alongside an HTTP server). It stays active as long as the host
- * process runs — listening for events, dispatching handlers, and heartbeating
+ * process runs, listening for events, dispatching handlers, and heartbeating
  * leases. The dispatcher, heartbeat timer, and lease loop keep the Node.js event
  * loop alive while there is active work.
  *
