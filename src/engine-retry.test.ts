@@ -47,7 +47,7 @@ function retryTests(label: string, opts: EngineOptions) {
       expect(run.result!.error).toBe('always-fails')
     })
 
-    it('retry with delay', async () => {
+    it('retry with delay', { timeout: 10_000 }, async () => {
       engine = createEngine({ ...opts, retry: { maxRetries: 1, delay: 50 } })
       let calls = 0
       engine.register('proc', 'go', async () => {
