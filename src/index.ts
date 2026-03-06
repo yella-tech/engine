@@ -111,6 +111,9 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   const handlerTimeoutMs = opts.handlerTimeoutMs ?? 30_000
   const leaseTimeoutMs = opts.leaseTimeoutMs ?? 30_000
   const heartbeatIntervalMs = opts.heartbeatIntervalMs ?? Math.floor(leaseTimeoutMs / 3)
+  if (heartbeatIntervalMs >= leaseTimeoutMs) {
+    throw new EngineError(ErrorCode.INVALID_CONFIG, `heartbeatIntervalMs (${heartbeatIntervalMs}) must be less than leaseTimeoutMs (${leaseTimeoutMs})`)
+  }
   const leaseOwner = crypto.randomUUID()
 
   const registry = createRegistry()
@@ -240,8 +243,8 @@ export function createEngine(opts: EngineOptions = {}): Engine {
 
   function retryRun(runId: string): Run {
     const run = runStore.get(runId)
-    if (!run) throw new Error(`Run not found: ${runId}`)
-    if (run.state !== 'errored') throw new Error(`Cannot retry run in state: ${run.state}`)
+    if (!run) throw new EngineError(ErrorCode.RUN_NOT_FOUND, `Run not found: ${runId}`)
+    if (run.state !== 'errored') throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Cannot retry run in state: ${run.state}`)
     runStore.prepareRetry(runId, 0) // retryAfter=0 means immediately
     const updated = runStore.transition(runId, 'idle', { error: 'manual retry' })
     dispatcher.kick()
@@ -250,8 +253,8 @@ export function createEngine(opts: EngineOptions = {}): Engine {
 
   function requeueDead(runId: string): Run {
     const run = runStore.get(runId)
-    if (!run) throw new Error(`Run not found: ${runId}`)
-    if (run.state !== 'errored') throw new Error(`Cannot requeue run in state: ${run.state}`)
+    if (!run) throw new EngineError(ErrorCode.RUN_NOT_FOUND, `Run not found: ${runId}`)
+    if (run.state !== 'errored') throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Cannot requeue run in state: ${run.state}`)
     runStore.resetAttempt(runId)
     const updated = runStore.transition(runId, 'idle', { error: 'requeued from dead letter' })
     dispatcher.kick()
@@ -260,9 +263,9 @@ export function createEngine(opts: EngineOptions = {}): Engine {
 
   function cancelRun(runId: string): Run {
     const run = runStore.get(runId)
-    if (!run) throw new Error(`Run not found: ${runId}`)
+    if (!run) throw new EngineError(ErrorCode.RUN_NOT_FOUND, `Run not found: ${runId}`)
     if (run.state !== 'idle' && run.state !== 'running') {
-      throw new Error(`Cannot cancel run in state: ${run.state}`)
+      throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Cannot cancel run in state: ${run.state}`)
     }
     runStore.setResult(runId, { success: false, error: 'cancelled' })
     return runStore.transition(runId, 'errored', { error: 'cancelled' })

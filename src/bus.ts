@@ -107,7 +107,7 @@ export function createBus(registry: Registry, runStore: RunStore, opts: BusOptio
 
   function buildContext(run: Run, handlerPayload: unknown): HandlerContext {
     const freshRun = runStore.get(run.id)!
-    const runContext = { ...freshRun.context }
+    const runContext = structuredClone(freshRun.context)
 
     return {
       event: run.eventName,

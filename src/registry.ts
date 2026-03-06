@@ -43,6 +43,10 @@ export function createRegistry() {
       throw new Error('Handler is required when registering with a schema')
     }
 
+    if (retry !== undefined && retry.maxRetries < 0) {
+      throw new EngineError(ErrorCode.INVALID_CONFIG, `maxRetries must be >= 0, got ${retry.maxRetries}`)
+    }
+
     const def: ProcessDefinition = { name, eventName, handler, schema, retry, version, singleton }
     byName.set(name, def)
 

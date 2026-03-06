@@ -26,6 +26,12 @@ export const ErrorCode = {
   GRACEFUL_STOP_TIMEOUT: 'GRACEFUL_STOP_TIMEOUT',
   /** A run's lease expired before it completed (crash recovery). */
   LEASE_EXPIRED: 'LEASE_EXPIRED',
+  /** A run was not found by ID. */
+  RUN_NOT_FOUND: 'RUN_NOT_FOUND',
+  /** An operation was attempted on a run in an invalid state. */
+  INVALID_RUN_STATE: 'INVALID_RUN_STATE',
+  /** An engine configuration option has an invalid value. */
+  INVALID_CONFIG: 'INVALID_CONFIG',
 } as const
 
 /** Union of all error code string literals. */
@@ -70,7 +76,7 @@ export const VALID_TRANSITIONS: Record<ProcessState, ProcessState[]> = {
  * Configuration for automatic retries on handler failure.
  */
 export type RetryPolicy = {
-  /** Maximum number of retry attempts before the run is sent to the dead-letter state. */
+  /** Maximum number of retry attempts before the run is sent to the dead-letter state. Must be >= 0. */
   maxRetries: number
   /**
    * Delay in milliseconds before the next retry, or a function that receives the
@@ -183,7 +189,11 @@ export type HandlerContext<T = unknown> = {
   runId: string
   /** Correlation ID shared across the entire event chain. */
   correlationId: string
-  /** Mutable key-value context shared across the correlation chain. */
+  /**
+   * Mutable key-value context shared across the correlation chain.
+   * Deep-copied via `structuredClone` on each handler invocation — direct mutations
+   * to nested objects will not persist. Use {@link setContext} to persist changes.
+   */
   context: Record<string, unknown>
   /**
    * Set a key-value pair in the run's shared context.
@@ -254,7 +264,11 @@ export type ProcessContext<T = unknown> = {
   runId: string
   /** Correlation ID shared across the entire event chain. */
   correlationId: string
-  /** Mutable key-value context shared across the correlation chain. */
+  /**
+   * Mutable key-value context shared across the correlation chain.
+   * Deep-copied via `structuredClone` on each handler invocation — direct mutations
+   * to nested objects will not persist. Use {@link setContext} to persist changes.
+   */
   context: Record<string, unknown>
   /** Set a key-value pair in the run's shared context. */
   setContext(key: string, value: unknown): void
@@ -453,7 +467,12 @@ export type EngineOptions = {
   onRunError?: (run: Run, error: string) => void
   /** Lease duration in milliseconds for crash recovery. @defaultValue 30000 */
   leaseTimeoutMs?: number
-  /** Heartbeat interval in milliseconds (defaults to leaseTimeoutMs / 3). */
+  /**
+   * Heartbeat interval in milliseconds (defaults to leaseTimeoutMs / 3).
+   * Must be strictly less than {@link leaseTimeoutMs}, otherwise the lease expires
+   * before the first heartbeat.
+   * @throws {@link EngineError} with code {@link ErrorCode.INVALID_CONFIG} if >= leaseTimeoutMs.
+   */
   heartbeatIntervalMs?: number
   /**
    * Called when an internal error is caught that would otherwise be silently swallowed.
@@ -601,7 +620,8 @@ export interface Engine {
    * Retry an errored run. Resets it to idle state for re-execution.
    * @param runId - The errored run's ID.
    * @returns The updated run in idle state.
-   * @throws If the run is not found or not in errored state.
+   * @throws {@link EngineError} with code {@link ErrorCode.RUN_NOT_FOUND} if the run does not exist.
+   * @throws {@link EngineError} with code {@link ErrorCode.INVALID_RUN_STATE} if the run is not in errored state.
    */
   retryRun(runId: string): Run
 
@@ -611,7 +631,8 @@ export interface Engine {
    * retry budget is available again.
    * @param runId - The errored run's ID.
    * @returns The updated run in idle state.
-   * @throws If the run is not found or not in errored state.
+   * @throws {@link EngineError} with code {@link ErrorCode.RUN_NOT_FOUND} if the run does not exist.
+   * @throws {@link EngineError} with code {@link ErrorCode.INVALID_RUN_STATE} if the run is not in errored state.
    */
   requeueDead(runId: string): Run
 
@@ -619,7 +640,8 @@ export interface Engine {
    * Cancel an idle or running run, moving it to errored state.
    * @param runId - The run's ID.
    * @returns The cancelled run.
-   * @throws If the run is not found or already in a terminal state.
+   * @throws {@link EngineError} with code {@link ErrorCode.RUN_NOT_FOUND} if the run does not exist.
+   * @throws {@link EngineError} with code {@link ErrorCode.INVALID_RUN_STATE} if the run is not in idle or running state.
    */
   cancelRun(runId: string): Run
 

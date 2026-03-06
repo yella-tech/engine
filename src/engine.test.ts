@@ -178,6 +178,29 @@ function engineTests(label: string, opts: EngineOptions) {
       expect(childRun.result!.payload).toBe('hello')
     })
 
+    it('context deep-copied: nested mutation does not leak into store', async () => {
+      engine = createEngine(opts)
+      engine.register('parent', 'start', async (ctx) => {
+        ctx.setContext('nested', { count: 0 })
+        return { success: true, triggerEvent: 'child', payload: null }
+      })
+      engine.register('child', 'child', async (ctx) => {
+        // Mutate nested object directly (not via setContext)
+        ;(ctx.context.nested as { count: number }).count = 999
+        return { success: true }
+      })
+
+      const [root] = engine.emit('start', null)
+      await engine.drain()
+
+      // The stored context should be unaffected by the direct mutation
+      const parentRun = engine.getRun(root.id)!
+      expect(parentRun.context.nested).toEqual({ count: 0 })
+      const chain = engine.getChain(root.id)
+      const childRun = chain.find((r) => r.processName === 'child')!
+      expect(childRun.context.nested).toEqual({ count: 0 })
+    })
+
     it('schema parse output is passed to handler payload', async () => {
       engine = createEngine(opts)
       engine.register(
