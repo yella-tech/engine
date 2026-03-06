@@ -1,0 +1,11 @@
+src/
+*.test.ts
+coverage/
+examples/
+*.db*
+ARCHITECTURE.md
+GUARANTEES.md
+DURABLE_RUNTIME_PLAN.md
+tsconfig.json
+.prettierrc
+vitest.config.*

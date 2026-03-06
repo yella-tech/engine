@@ -1,0 +1,65 @@
+{
+  "name": "@yella/engine",
+  "version": "1.0.0",
+  "description": "Crash-proof background jobs for TypeScript. Side effects run once, retries skip what already worked.",
+  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "LICENSE", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "postbuild": "cp -r src/server/public dist/server/public",
+    "test": "vitest run",
+    "test:watch": "vitest --ui --coverage",
+    "example": "tsx examples/example.ts",
+    "load-test": "tsx examples/load-test.ts",
+    "format": "prettier --write 'src/**/*.ts'",
+    "format:check": "prettier --check 'src/**/*.ts'"
+  },
+  "keywords": [
+    "background-jobs",
+    "durable-execution",
+    "typescript",
+    "sqlite",
+    "workflow",
+    "side-effects"
+  ],
+  "author": "jorgt",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yella-tech/engine.git"
+  },
+  "homepage": "https://yella.tech",
+  "bugs": {
+    "url": "https://github.com/yella-tech/engine/issues"
+  },
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.3.3",
+    "@vitest/coverage-v8": "^4.0.18",
+    "@vitest/ui": "^4.0.18",
+    "prettier": "^3.8.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.11",
+    "better-sqlite3": "^12.6.2",
+    "hono": "^4.12.5"
+  },
+  "peerDependencies": {
+    "zod": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    }
+  }
+}
