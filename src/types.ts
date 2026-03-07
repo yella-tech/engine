@@ -168,6 +168,8 @@ export type HandlerResult = {
   payload?: unknown
   /** Optional event name to emit as a chained event. */
   triggerEvent?: string
+  /** When true, `triggerEvent` is stored but not emitted. Use `engine.resume(runId)` to emit it later. Defaults to `false`. */
+  deferred?: boolean
   /** Error message if the handler failed. */
   error?: string
   /** Structured error code if the handler failed. */
@@ -644,6 +646,17 @@ export interface Engine {
    * @throws {@link EngineError} with code {@link ErrorCode.INVALID_RUN_STATE} if the run is not in idle or running state.
    */
   cancelRun(runId: string): Run
+
+  /**
+   * Resume a completed run whose handler returned `{ triggerEvent, deferred: true }`.
+   * Emits the deferred `triggerEvent` as a chained event, continuing the correlation chain.
+   * @param runId - The completed run's ID.
+   * @param payload - Optional additional payload to merge with the stored result payload.
+   * @returns The newly created child runs.
+   * @throws {@link EngineError} with code {@link ErrorCode.RUN_NOT_FOUND} if the run does not exist.
+   * @throws {@link EngineError} with code {@link ErrorCode.INVALID_RUN_STATE} if the run is not completed, has no triggerEvent, or is not deferred.
+   */
+  resume(runId: string, payload?: unknown): Run[]
 
   /**
    * Stop the engine and tear down all internal timers (dispatcher, heartbeat, lease loop).

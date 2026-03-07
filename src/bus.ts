@@ -165,7 +165,7 @@ export function createBus(registry: Registry, runStore: RunStore, opts: BusOptio
     if (!result.success) safeCallHook(opts.onRunError, [finished, result.error ?? 'unknown'], opts.onInternalError, 'onRunError')
     safeCallHook(opts.onRunFinish, [finished], opts.onInternalError, 'onRunFinish')
 
-    if (result.success && result.triggerEvent) {
+    if (result.success && result.triggerEvent && !result.deferred) {
       enqueue(result.triggerEvent, result.payload, run.id, run.correlationId, context)
     }
   }

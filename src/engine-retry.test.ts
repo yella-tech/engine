@@ -47,25 +47,35 @@ function retryTests(label: string, opts: EngineOptions) {
       expect(run.result!.error).toBe('always-fails')
     })
 
-    it('retry with delay', { timeout: 10_000 }, async () => {
-      engine = createEngine({ ...opts, retry: { maxRetries: 1, delay: 50 } })
+    it('retry with delay', async () => {
+      engine = createEngine({ ...opts, retry: { maxRetries: 1, delay: 10 } })
       let calls = 0
+      let firstFailed: Promise<void>
+      const firstFailedPromise = new Promise<void>((resolve) => {
+        firstFailed = resolve as unknown as Promise<void>
+      })
       engine.register('proc', 'go', async () => {
         calls++
-        if (calls === 1) throw new Error('transient')
+        if (calls === 1) {
+          // Signal that first attempt ran, then fail
+          ;(firstFailed as unknown as () => void)()
+          throw new Error('transient')
+        }
         return { success: true }
       })
 
       engine.emit('go', 'data')
 
-      // After first failure, run should be idle but not yet claimable
+      // Wait for the first attempt to actually fail
+      await firstFailedPromise
       await new Promise((r) => setTimeout(r, 10))
+
       const idle = engine.getIdle()
       expect(idle).toHaveLength(1)
       expect(idle[0].retryAfter).not.toBeNull()
 
       // Wait for the retry delay to expire and be picked up
-      await engine.drain(10_000)
+      await engine.drain()
 
       expect(engine.getCompleted()).toHaveLength(1)
     })

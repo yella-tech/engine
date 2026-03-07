@@ -271,6 +271,18 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     return runStore.transition(runId, 'errored', { error: 'cancelled' })
   }
 
+  function resume(runId: string, payload?: unknown): Run[] {
+    const run = runStore.get(runId)
+    if (!run) throw new EngineError(ErrorCode.RUN_NOT_FOUND, `Run not found: ${runId}`)
+    if (run.state !== 'completed') throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Cannot resume run in state: ${run.state}`)
+    if (!run.result?.triggerEvent) throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Run has no triggerEvent to resume`)
+    if (!run.result?.deferred) throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Run is not deferred`)
+    const mergedPayload = payload !== undefined ? { ...(run.result.payload as any), ...payload } : run.result.payload
+    const runs = bus.enqueue(run.result.triggerEvent, mergedPayload, run.id, run.correlationId, run.context)
+    dispatcher.kick()
+    return runs
+  }
+
   function getServer(): Promise<DevServer> | null {
     return serverPromise
   }
@@ -389,6 +401,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     retryRun,
     requeueDead,
     cancelRun,
+    resume,
     stop,
     drain,
     getServer,
