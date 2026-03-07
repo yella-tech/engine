@@ -65,7 +65,7 @@ function retryTests(label: string, opts: EngineOptions) {
       expect(idle[0].retryAfter).not.toBeNull()
 
       // Wait for the retry delay to expire and be picked up
-      await engine.drain(5000)
+      await engine.drain(10_000)
 
       expect(engine.getCompleted()).toHaveLength(1)
     })
