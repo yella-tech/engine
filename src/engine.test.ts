@@ -469,6 +469,124 @@ function engineTests(label: string, opts: EngineOptions) {
         expect(chain.every((r) => r.correlationId === root.correlationId)).toBe(true)
       })
     })
+
+    describe('deferred + resume', () => {
+      it('deferred triggerEvent does not emit immediately', async () => {
+        engine = createEngine(opts)
+        let continuationFired = false
+        engine.register('step1', 'start', async () => ({
+          success: true,
+          triggerEvent: 'continue',
+          deferred: true,
+          payload: { step: 1 },
+        }))
+        engine.register('step2', 'continue', async () => {
+          continuationFired = true
+          return { success: true }
+        })
+
+        await engine.emitAndWait('start', {})
+
+        expect(continuationFired).toBe(false)
+        const completed = engine.getCompleted()
+        expect(completed).toHaveLength(1)
+        expect(completed[0].result!.triggerEvent).toBe('continue')
+        expect(completed[0].result!.deferred).toBe(true)
+      })
+
+      it('resume emits the deferred triggerEvent and continues the chain', async () => {
+        engine = createEngine(opts)
+        let continuationPayload: unknown = null
+        engine.register('step1', 'start', async () => ({
+          success: true,
+          triggerEvent: 'continue',
+          deferred: true,
+          payload: { orderId: 'abc' },
+        }))
+        engine.register('step2', 'continue', async (ctx) => {
+          continuationPayload = ctx.payload
+          return { success: true }
+        })
+
+        await engine.emitAndWait('start', {})
+        const deferred = engine.getCompleted()[0]
+
+        const childRuns = engine.resume(deferred.id, { approved: true })
+        expect(childRuns).toHaveLength(1)
+        await engine.drain()
+
+        expect(continuationPayload).toBeDefined()
+        const chain = engine.getChain(deferred.id)
+        expect(chain).toHaveLength(2)
+        expect(chain.every((r) => r.correlationId === deferred.correlationId)).toBe(true)
+      })
+
+      it('resume merges additional payload', async () => {
+        engine = createEngine(opts)
+        let received: unknown = null
+        engine.register('step1', 'start', async () => ({
+          success: true,
+          triggerEvent: 'continue',
+          deferred: true,
+          payload: { orderId: 'xyz' },
+        }))
+        engine.register('step2', 'continue', async (ctx) => {
+          received = ctx.payload
+          return { success: true }
+        })
+
+        await engine.emitAndWait('start', {})
+        const deferred = engine.getCompleted()[0]
+
+        engine.resume(deferred.id, { approved: true })
+        await engine.drain()
+
+        expect(received).toMatchObject({ orderId: 'xyz', approved: true })
+      })
+
+      it('resume throws on non-completed run', async () => {
+        engine = createEngine(opts)
+        engine.register('proc', 'start', async () => {
+          await new Promise((r) => setTimeout(r, 100))
+          return { success: true }
+        })
+
+        const [run] = engine.emit('start', {})
+        expect(() => engine.resume(run.id)).toThrow(/Cannot resume/)
+      })
+
+      it('resume throws on non-deferred run', async () => {
+        engine = createEngine(opts)
+        engine.register('proc', 'start', async () => ({
+          success: true,
+          triggerEvent: 'next',
+        }))
+        engine.register('noop', 'next', async () => ({ success: true }))
+
+        await engine.emitAndWait('start', {})
+        // The first run completed and already fired triggerEvent synchronously
+        // Find the parent run (depth 0)
+        const parent = engine.getCompleted().find((r) => r.depth === 0)!
+        expect(() => engine.resume(parent.id)).toThrow(/not deferred/)
+      })
+
+      it('resume throws on run without triggerEvent', async () => {
+        engine = createEngine(opts)
+        engine.register('proc', 'start', async () => ({
+          success: true,
+          deferred: true,
+        }))
+
+        await engine.emitAndWait('start', {})
+        const run = engine.getCompleted()[0]
+        expect(() => engine.resume(run.id)).toThrow(/no triggerEvent/)
+      })
+
+      it('resume throws on unknown runId', () => {
+        engine = createEngine(opts)
+        expect(() => engine.resume('nonexistent')).toThrow(/not found/)
+      })
+    })
   })
 }
 
