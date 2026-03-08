@@ -776,14 +776,24 @@ describe('getGraph', () => {
   it('builds graph from process registrations with explicit emits', async () => {
     const engine = createEngine()
 
-    engine.register('validate', 'order:new', async () => ({
-      success: true,
-      triggerEvent: 'order:validated',
-    }), { emits: ['order:validated'] })
-    engine.register('charge', 'order:validated', async () => ({
-      success: true,
-      triggerEvent: 'order:charged',
-    }), { emits: ['order:charged'] })
+    engine.register(
+      'validate',
+      'order:new',
+      async () => ({
+        success: true,
+        triggerEvent: 'order:validated',
+      }),
+      { emits: ['order:validated'] },
+    )
+    engine.register(
+      'charge',
+      'order:validated',
+      async () => ({
+        success: true,
+        triggerEvent: 'order:charged',
+      }),
+      { emits: ['order:charged'] },
+    )
     engine.register('fulfill', 'order:charged', async () => ({
       success: true,
     }))
