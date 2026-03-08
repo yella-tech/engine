@@ -771,3 +771,105 @@ function convenienceTests(label: string, opts: EngineOptions) {
 
 convenienceTests('memory', {})
 convenienceTests('sqlite', { store: { type: 'sqlite', path: ':memory:' } })
+
+describe('getGraph', () => {
+  it('builds graph from process registrations with explicit emits', async () => {
+    const engine = createEngine()
+
+    engine.register('validate', 'order:new', async () => ({
+      success: true,
+      triggerEvent: 'order:validated',
+    }), { emits: ['order:validated'] })
+    engine.register('charge', 'order:validated', async () => ({
+      success: true,
+      triggerEvent: 'order:charged',
+    }), { emits: ['order:charged'] })
+    engine.register('fulfill', 'order:charged', async () => ({
+      success: true,
+    }))
+
+    const graph = engine.getGraph()
+
+    expect(graph.nodes).toHaveLength(3)
+    expect(graph.nodes.find((n) => n.name === 'validate')?.emits).toEqual(['order:validated'])
+    expect(graph.nodes.find((n) => n.name === 'charge')?.emits).toEqual(['order:charged'])
+    expect(graph.nodes.find((n) => n.name === 'fulfill')?.emits).toEqual([])
+
+    expect(graph.edges).toHaveLength(2)
+    expect(graph.edges).toContainEqual({ from: 'validate', event: 'order:validated', to: 'charge' })
+    expect(graph.edges).toContainEqual({ from: 'charge', event: 'order:charged', to: 'fulfill' })
+
+    await engine.stop()
+  })
+
+  it('builds graph from process() API with explicit emits', async () => {
+    const engine = createEngine()
+
+    engine.process({
+      name: 'research',
+      on: 'topic:assigned',
+      emits: ['topic:analyzed'],
+      run: async (ctx) => ctx.ok({ done: true }, { emit: 'topic:analyzed' }),
+    })
+    engine.process({
+      name: 'summarize',
+      on: 'topic:analyzed',
+      run: async (ctx) => ctx.ok(),
+    })
+
+    const graph = engine.getGraph()
+
+    expect(graph.nodes.find((n) => n.name === 'research')?.emits).toEqual(['topic:analyzed'])
+    expect(graph.edges).toContainEqual({ from: 'research', event: 'topic:analyzed', to: 'summarize' })
+
+    await engine.stop()
+  })
+
+  it('supports explicit emits declaration', async () => {
+    const engine = createEngine()
+
+    engine.process({
+      name: 'router',
+      on: 'request',
+      emits: ['route:a', 'route:b'],
+      run: async (ctx) => {
+        const target = (ctx.payload as any).target
+        return ctx.ok({}, { emit: target })
+      },
+    })
+    engine.process({ name: 'handle-a', on: 'route:a', run: async (ctx) => ctx.ok() })
+    engine.process({ name: 'handle-b', on: 'route:b', run: async (ctx) => ctx.ok() })
+
+    const graph = engine.getGraph()
+
+    expect(graph.nodes.find((n) => n.name === 'router')?.emits).toEqual(['route:a', 'route:b'])
+    expect(graph.edges).toHaveLength(2)
+    expect(graph.edges).toContainEqual({ from: 'router', event: 'route:a', to: 'handle-a' })
+    expect(graph.edges).toContainEqual({ from: 'router', event: 'route:b', to: 'handle-b' })
+
+    await engine.stop()
+  })
+
+  it('handles fan-out (one event, multiple listeners)', async () => {
+    const engine = createEngine()
+
+    engine.register('emitter', 'start', async () => ({ success: true, triggerEvent: 'next' }), { emits: ['next'] })
+    engine.register('listener-a', 'next', async () => ({ success: true }))
+    engine.register('listener-b', 'next', async () => ({ success: true }))
+
+    const graph = engine.getGraph()
+
+    expect(graph.edges).toContainEqual({ from: 'emitter', event: 'next', to: 'listener-a' })
+    expect(graph.edges).toContainEqual({ from: 'emitter', event: 'next', to: 'listener-b' })
+
+    await engine.stop()
+  })
+
+  it('returns empty graph when no processes registered', async () => {
+    const engine = createEngine()
+    const graph = engine.getGraph()
+    expect(graph.nodes).toEqual([])
+    expect(graph.edges).toEqual([])
+    await engine.stop()
+  })
+})

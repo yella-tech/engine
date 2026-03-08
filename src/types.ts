@@ -166,9 +166,29 @@ export type HandlerResult = {
   success: boolean
   /** Optional result payload. */
   payload?: unknown
-  /** Optional event name to emit as a chained event. */
+  /** Optional event name to emit as a chained event. When `deferred` is true, the event is stored but not emitted until `engine.resume(runId)` is called. */
   triggerEvent?: string
-  /** When true, `triggerEvent` is stored but not emitted. Use `engine.resume(runId)` to emit it later. Defaults to `false`. */
+  /**
+   * When true, `triggerEvent` is stored on the completed run but not emitted.
+   * Call `engine.resume(runId)` later to continue the chain. This enables
+   * human-in-the-loop workflows where a pipeline pauses for external approval.
+   *
+   * @defaultValue false
+   *
+   * @example
+   * ```ts
+   * // Handler defers the next step
+   * engine.register('validate', 'order:new', async (ctx) => ({
+   *   success: true,
+   *   triggerEvent: 'order:approved',
+   *   deferred: true,
+   *   payload: { orderId: ctx.payload.orderId },
+   * }))
+   *
+   * // Later, after approval:
+   * engine.resume(runId) // emits 'order:approved', continuing the chain
+   * ```
+   */
   deferred?: boolean
   /** Error message if the handler failed. */
   error?: string
@@ -316,6 +336,24 @@ export type ProcessDefinitionConfig<T = unknown> = {
   version?: string
   /** When true, only one run of this process may be active (idle or running) at a time. Additional events are silently dropped. @defaultValue false */
   singleton?: boolean
+  /**
+   * Event names this process may emit via `triggerEvent` in the handler result.
+   * Used to build the static event flow graph returned by {@link Engine.getGraph}.
+   *
+   * @example
+   * ```ts
+   * engine.process({
+   *   name: 'validate',
+   *   on: 'order:new',
+   *   emits: ['order:validated', 'order:rejected'],
+   *   run: async (ctx) => {
+   *     const valid = await validate(ctx.payload)
+   *     return ctx.ok(ctx.payload, { emit: valid ? 'order:validated' : 'order:rejected' })
+   *   },
+   * })
+   * ```
+   */
+  emits?: string[]
   /** The handler function executed when the event fires. */
   run: (ctx: ProcessContext<T>) => Promise<HandlerResult> | HandlerResult
 }
@@ -385,6 +423,12 @@ export type ProcessDefinition = {
   version?: string
   /** When true, only one run of this process may be active (idle or running) at a time. @defaultValue false */
   singleton?: boolean
+  /**
+   * Event names this process may emit via `triggerEvent`.
+   * Declared explicitly via the `emits` registration option.
+   * Used by {@link Engine.getGraph} to build the static event flow graph.
+   */
+  emits?: string[]
 }
 
 /**
@@ -619,6 +663,27 @@ export interface Engine {
   getEffects(runId: string): EffectRecord[]
 
   /**
+   * Get the static event flow graph built from all registered processes.
+   *
+   * Returns a directed graph where nodes are processes and edges represent
+   * event connections: an edge exists from process A to process B when A
+   * declares an event in its `emits` array that matches B's `on` event.
+   *
+   * The graph is useful for visualization, pipeline validation, and the
+   * dev dashboard's Graph tab.
+   *
+   * @returns The event flow graph with nodes and edges.
+   *
+   * @example
+   * ```ts
+   * const graph = engine.getGraph()
+   * // graph.nodes: [{ name: 'validate', on: 'order:new', emits: ['order:validated'] }, ...]
+   * // graph.edges: [{ from: 'validate', event: 'order:validated', to: 'charge' }, ...]
+   * ```
+   */
+  getGraph(): EventGraph
+
+  /**
    * Retry an errored run. Resets it to idle state for re-execution.
    * @param runId - The errored run's ID.
    * @returns The updated run in idle state.
@@ -682,6 +747,48 @@ export interface Engine {
    * is bound. Uses dynamic import so users without `server` pay zero cost.
    */
   getServer(): Promise<DevServer> | null
+}
+
+/**
+ * A node in the event flow graph, representing a registered process.
+ * @see {@link Engine.getGraph}
+ */
+export type EventGraphNode = {
+  /** Unique process name. */
+  name: string
+  /** The event this process listens for (its trigger). */
+  on: string
+  /** Events this process may emit, as declared via the `emits` registration option. Empty array if none declared. */
+  emits: string[]
+}
+
+/**
+ * A directed edge in the event flow graph. Represents a causal connection
+ * where one process emits an event that another process listens for.
+ * @see {@link Engine.getGraph}
+ */
+export type EventGraphEdge = {
+  /** Source process name (the emitter). */
+  from: string
+  /** The event name connecting source to target. */
+  event: string
+  /** Target process name (the listener). */
+  to: string
+}
+
+/**
+ * The static event flow graph built from process registrations.
+ * Represents the declared topology of your event pipeline — which
+ * processes connect to which via emitted events.
+ *
+ * Useful for visualization, validation, and the dev dashboard Graph tab.
+ * @see {@link Engine.getGraph}
+ */
+export type EventGraph = {
+  /** All registered processes as graph nodes. */
+  nodes: EventGraphNode[]
+  /** Directed edges connecting emitters to listeners. */
+  edges: EventGraphEdge[]
 }
 
 /**

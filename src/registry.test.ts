@@ -69,4 +69,18 @@ describe('createRegistry', () => {
       expect(all.map((d) => d.name).sort()).toEqual(['a', 'b', 'c'])
     })
   })
+
+  describe('emits on process definitions', () => {
+    it('uses explicit emits when provided', () => {
+      registry.register('step2', 'start', noop, { emits: ['custom:event'] })
+      const def = registry.getAll().find((d) => d.name === 'step2')
+      expect(def?.emits).toEqual(['custom:event'])
+    })
+
+    it('omits emits field when none found', () => {
+      registry.register('quiet', 'start', noop)
+      const def = registry.getAll().find((d) => d.name === 'quiet')
+      expect(def?.emits).toBeUndefined()
+    })
+  })
 })

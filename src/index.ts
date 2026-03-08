@@ -23,6 +23,9 @@ import type {
   Run,
   RunStore,
   Schema,
+  EventGraph,
+  EventGraphNode,
+  EventGraphEdge,
 } from './types.js'
 
 export type {
@@ -46,6 +49,9 @@ export type {
   RunStore,
   Schema,
   TimelineEntry,
+  EventGraph,
+  EventGraphNode,
+  EventGraphEdge,
 } from './types.js'
 export { EngineError, ErrorCode, VALID_TRANSITIONS } from './types.js'
 export { createEffectStore } from './effect.js'
@@ -374,12 +380,34 @@ export function createEngine(opts: EngineOptions = {}): Engine {
       return run(processCtx)
     }
 
-    const opts = { ...(retryPolicy && { retry: retryPolicy }), ...(version && { version }), ...(singleton && { singleton }) }
+    const opts = { ...(retryPolicy && { retry: retryPolicy }), ...(version && { version }), ...(singleton && { singleton }), ...(config.emits && config.emits.length > 0 && { emits: config.emits }) }
     if (schema) {
       register(name, eventName, schema, handler as any, Object.keys(opts).length ? opts : undefined)
     } else {
       register(name, eventName, handler as Handler, Object.keys(opts).length ? opts : undefined)
     }
+  }
+
+  function getGraph(): EventGraph {
+    const processes = registry.getAll()
+    const nodes: EventGraphNode[] = processes.map((p) => ({
+      name: p.name,
+      on: p.eventName,
+      emits: p.emits ?? [],
+    }))
+    const edges: EventGraphEdge[] = []
+
+    for (const p of processes) {
+      if (!p.emits) continue
+      for (const emitted of p.emits) {
+        const targets = registry.getByEvent(emitted)
+        for (const target of targets) {
+          edges.push({ from: p.name, event: emitted, to: target.name })
+        }
+      }
+    }
+
+    return { nodes, edges }
   }
 
   const engine: Engine = {
@@ -398,6 +426,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     getChain,
     getProcesses,
     getEffects,
+    getGraph,
     retryRun,
     requeueDead,
     cancelRun,

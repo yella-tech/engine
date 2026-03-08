@@ -9,7 +9,7 @@ export function createRegistry() {
     return typeof value !== 'function' && value !== null && typeof value.parse === 'function'
   }
 
-  type RegisterOpts = { retry?: RetryPolicy; version?: string; singleton?: boolean }
+  type RegisterOpts = { retry?: RetryPolicy; version?: string; singleton?: boolean; emits?: string[] }
 
   function register(name: string, eventName: string, handler: Handler, opts?: RegisterOpts): void
   function register<T>(name: string, eventName: string, schema: Schema<T>, handler: (ctx: HandlerContext<T>) => Promise<HandlerResult> | HandlerResult, opts?: RegisterOpts): void
@@ -21,6 +21,7 @@ export function createRegistry() {
     let retry: RetryPolicy | undefined
     let version: string | undefined
     let singleton: boolean | undefined
+    let explicitEmits: string[] | undefined
 
     if (typeof maybeHandlerOrOpts === 'function') {
       // 4+ arg form: register(name, event, schema, handler, opts?)
@@ -32,12 +33,14 @@ export function createRegistry() {
       retry = maybeOpts?.retry
       version = maybeOpts?.version
       singleton = maybeOpts?.singleton
+      explicitEmits = maybeOpts?.emits
     } else if (!isSchema(schemaOrHandler)) {
       // 3+ arg form: register(name, event, handler, opts?)
       handler = schemaOrHandler
       retry = (maybeHandlerOrOpts as RegisterOpts | undefined)?.retry
       version = (maybeHandlerOrOpts as RegisterOpts | undefined)?.version
       singleton = (maybeHandlerOrOpts as RegisterOpts | undefined)?.singleton
+      explicitEmits = (maybeHandlerOrOpts as RegisterOpts | undefined)?.emits
     } else {
       // Edge case: schema passed without handler, shouldn't happen but guard against it
       throw new Error('Handler is required when registering with a schema')
@@ -47,7 +50,7 @@ export function createRegistry() {
       throw new EngineError(ErrorCode.INVALID_CONFIG, `maxRetries must be >= 0, got ${retry.maxRetries}`)
     }
 
-    const def: ProcessDefinition = { name, eventName, handler, schema, retry, version, singleton }
+    const def: ProcessDefinition = { name, eventName, handler, schema, retry, version, singleton, ...(explicitEmits && explicitEmits.length > 0 && { emits: explicitEmits }) }
     byName.set(name, def)
 
     const list = byEvent.get(eventName) ?? []

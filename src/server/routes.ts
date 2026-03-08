@@ -119,6 +119,10 @@ export function registerRoutes(app: Hono, engine: Engine) {
     }
   })
 
+  app.get('/graph', (c) => {
+    return c.json(engine.getGraph())
+  })
+
   app.post('/emit', async (c) => {
     const body = await c.req.json<{ event?: string; payload?: unknown; idempotencyKey?: string }>()
     const { event, payload, idempotencyKey } = body

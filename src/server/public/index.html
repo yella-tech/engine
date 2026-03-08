@@ -312,6 +312,41 @@ body { display: flex; flex-direction: column; font-size: var(--text-sm); }
   padding: var(--space-5);
 }
 
+/* Graph */
+.graph-container {
+  border: var(--border) solid var(--black);
+  overflow: auto;
+  max-height: calc(100vh - 200px);
+  background: var(--white);
+}
+
+.graph-legend {
+  display: flex;
+  gap: var(--space-5);
+  align-items: center;
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
+}
+
+.graph-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: var(--border) solid var(--black);
+  margin-right: var(--space-1);
+  vertical-align: middle;
+}
+
+.graph-swatch-static { background: var(--white); }
+.graph-swatch-active { background: var(--accent); }
+
+.graph-empty {
+  font-size: var(--text-sm);
+  padding: var(--space-7) 0;
+  text-align: center;
+  color: var(--muted);
+}
+
 /* Mobile */
 @media (max-width: 768px) {
   .run-overlay { width: 100%; left: 0; }
@@ -423,9 +458,10 @@ const icons = {
   runs: html`<svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`,
   trace: html`<svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="15" y2="6"/><line x1="5" y1="12" x2="21" y2="12"/><line x1="7" y1="18" x2="18" y2="18"/></svg>`,
   emit: html`<svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>`,
+  graph: html`<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="19" cy="18" r="2.5"/><line x1="7.5" y1="11" x2="16.5" y2="7"/><line x1="7.5" y1="13" x2="16.5" y2="17"/></svg>`,
 }
 
-const TABS = ['overview', 'processes', 'runs', 'trace', 'emit']
+const TABS = ['overview', 'processes', 'runs', 'trace', 'graph', 'emit']
 
 // ─── Nav ─────────────────────────────────────────────────────
 
@@ -534,7 +570,7 @@ function OverviewPanel({ health, recentRuns, onRowClick, activeRunId }) {
 
 // ─── Processes Panel ─────────────────────────────────────────
 
-function ProcessesPanel({ processes, onEmit }) {
+function ProcessesPanel({ processes, onEmit, onGraph }) {
   if (!processes || !processes.length) {
     return html`<div class="empty">No processes registered</div>`
   }
@@ -547,7 +583,10 @@ function ProcessesPanel({ processes, onEmit }) {
             <tr key=${p.name}>
               <td>${p.name}</td>
               <td>${p.event}</td>
-              <td><button class="btn btn-sm" onClick=${() => onEmit(p.event)}>Emit</button></td>
+              <td style="display:flex;gap:var(--space-2)">
+                <button class="btn btn-sm" onClick=${() => onGraph(p.name)}>Graph</button>
+                <button class="btn btn-sm" onClick=${() => onEmit(p.event)}>Emit</button>
+              </td>
             </tr>
           `)}
         </tbody>
@@ -770,7 +809,10 @@ function RunOverlay({ overlay, actions }) {
         `}
 
         ${chain.length > 1 && rootRun && html`
-          <button class="btn btn-sm mt-4" onClick=${() => actions.viewInTrace(rootRun.id)}>View in Trace</button>
+          <div style="display:flex;gap:var(--space-3);margin-top:var(--space-4)">
+            <button class="btn btn-sm" onClick=${() => actions.viewInTrace(rootRun.id)}>View in Trace</button>
+            <button class="btn btn-sm" onClick=${() => actions.viewInGraph(rootRun.id)}>View Graph</button>
+          </div>
         `}
       </div>
     </div>
@@ -953,6 +995,253 @@ function TracePanel({ onSpanClick }) {
   `
 }
 
+// ─── Graph Layout Utilities ──────────────────────────────────
+
+const GRAPH_NODE_W = 160
+const GRAPH_NODE_H = 44
+const GRAPH_LAYER_GAP = 120
+const GRAPH_NODE_GAP = 24
+const GRAPH_PAD = 40
+
+function assignLayers(nodes, edges) {
+  const adj = new Map()
+  const inDeg = new Map()
+  for (const n of nodes) {
+    adj.set(n.name, [])
+    inDeg.set(n.name, 0)
+  }
+  for (const e of edges) {
+    if (adj.has(e.from) && inDeg.has(e.to)) {
+      adj.get(e.from).push(e.to)
+      inDeg.set(e.to, inDeg.get(e.to) + 1)
+    }
+  }
+  const layers = new Map()
+  // BFS longest-path from sources
+  const queue = []
+  for (const n of nodes) {
+    if (inDeg.get(n.name) === 0) {
+      layers.set(n.name, 0)
+      queue.push(n.name)
+    }
+  }
+  while (queue.length > 0) {
+    const cur = queue.shift()
+    const curLayer = layers.get(cur)
+    for (const next of (adj.get(cur) || [])) {
+      const prev = layers.get(next)
+      const newLayer = curLayer + 1
+      if (prev === undefined || newLayer > prev) {
+        layers.set(next, newLayer)
+        queue.push(next)
+      }
+    }
+  }
+  // Assign disconnected nodes to layer 0
+  for (const n of nodes) {
+    if (!layers.has(n.name)) layers.set(n.name, 0)
+  }
+  return layers
+}
+
+function layoutGraph(nodes, edges) {
+  const layers = assignLayers(nodes, edges)
+  const byLayer = new Map()
+  for (const n of nodes) {
+    const l = layers.get(n.name)
+    if (!byLayer.has(l)) byLayer.set(l, [])
+    byLayer.get(l).push(n)
+  }
+  const positions = new Map()
+  const maxLayer = Math.max(0, ...byLayer.keys())
+  for (let l = 0; l <= maxLayer; l++) {
+    const col = byLayer.get(l) || []
+    col.forEach((n, i) => {
+      positions.set(n.name, {
+        x: GRAPH_PAD + l * (GRAPH_NODE_W + GRAPH_LAYER_GAP),
+        y: GRAPH_PAD + i * (GRAPH_NODE_H + GRAPH_NODE_GAP),
+        w: GRAPH_NODE_W,
+        h: GRAPH_NODE_H,
+      })
+    })
+  }
+  const allPos = [...positions.values()]
+  const svgW = allPos.length ? Math.max(...allPos.map(p => p.x + p.w)) + GRAPH_PAD : 400
+  const svgH = allPos.length ? Math.max(...allPos.map(p => p.y + p.h)) + GRAPH_PAD : 200
+  return { positions, svgW, svgH }
+}
+
+function edgePath(fromPos, toPos) {
+  const x1 = fromPos.x + fromPos.w
+  const y1 = fromPos.y + fromPos.h / 2
+  const x2 = toPos.x
+  const y2 = toPos.y + toPos.h / 2
+  const dx = (x2 - x1) * 0.5
+  return `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`
+}
+
+function buildActiveSet(chainRuns) {
+  const activeNodes = new Set()
+  const activeEdges = new Set()
+  const byId = new Map()
+  for (const r of chainRuns) {
+    byId.set(r.id, r)
+    activeNodes.add(r.processName)
+  }
+  for (const r of chainRuns) {
+    if (r.parentRunId) {
+      const parent = byId.get(r.parentRunId)
+      if (parent) {
+        activeEdges.add(`${parent.processName}:${r.eventName}:${r.processName}`)
+      }
+    }
+  }
+  return { activeNodes, activeEdges }
+}
+
+// ─── Graph Panel ────────────────────────────────────────────
+
+function GraphPanel({ mode, onNodeClick }) {
+  const [graphData, setGraphData] = useState(null)
+  const [chainRuns, setChainRuns] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    window.__graphPanel = { loadChain }
+    return () => { window.__graphPanel = null }
+  })
+
+  async function loadChain(rootId) {
+    try {
+      const data = await api('/runs/' + rootId + '/chain')
+      setChainRuns((data.runs || []).sort((a, b) => (a.depth ?? 0) - (b.depth ?? 0) || a.startedAt - b.startedAt))
+    } catch {}
+  }
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true)
+      try {
+        const data = await api('/graph')
+        setGraphData(data)
+      } catch {}
+      setLoading(false)
+    })()
+  }, [])
+
+  useEffect(() => {
+    if (mode && mode.chain) loadChain(mode.chain)
+    else setChainRuns(null)
+  }, [mode && mode.chain])
+
+  if (loading) return html`<div class="empty">Loading graph...</div>`
+
+  const nodes = graphData ? graphData.nodes || [] : []
+  const edges = graphData ? graphData.edges || [] : []
+
+  // Merge chain-only processes as ad-hoc nodes
+  let mergedNodes = [...nodes]
+  let mergedEdges = [...edges]
+  const active = chainRuns ? buildActiveSet(chainRuns) : { activeNodes: new Set(), activeEdges: new Set() }
+
+  if (chainRuns) {
+    const existingNames = new Set(nodes.map(n => n.name))
+    for (const r of chainRuns) {
+      if (!existingNames.has(r.processName)) {
+        mergedNodes.push({ name: r.processName, on: r.eventName, emits: [] })
+        existingNames.add(r.processName)
+      }
+    }
+    // Add chain edges not in static graph
+    const byId = new Map()
+    for (const r of chainRuns) byId.set(r.id, r)
+    const existingEdgeKeys = new Set(edges.map(e => `${e.from}:${e.event}:${e.to}`))
+    for (const r of chainRuns) {
+      if (r.parentRunId) {
+        const parent = byId.get(r.parentRunId)
+        if (parent) {
+          const key = `${parent.processName}:${r.eventName}:${r.processName}`
+          if (!existingEdgeKeys.has(key)) {
+            mergedEdges.push({ from: parent.processName, event: r.eventName, to: r.processName })
+            existingEdgeKeys.add(key)
+          }
+        }
+      }
+    }
+  }
+
+  if (mergedNodes.length === 0) {
+    return html`<div class="graph-empty">No graph data. Declare <code>emits</code> on your processes or select a run to see its execution flow.</div>`
+  }
+
+  const focusedProcess = mode && mode.process ? mode.process : null
+  const { positions, svgW, svgH } = layoutGraph(mergedNodes, mergedEdges)
+
+  return html`
+    <div>
+      <div class="graph-container">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgW} ${svgH}" style="width:${svgW}px;max-width:100%;height:auto;display:block">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#777" />
+            </marker>
+            <marker id="arrow-active" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#000" />
+            </marker>
+          </defs>
+          ${mergedEdges.map((e, i) => {
+            const from = positions.get(e.from)
+            const to = positions.get(e.to)
+            if (!from || !to) return null
+            const eKey = `${e.from}:${e.event}:${e.to}`
+            const isActive = active.activeEdges.has(eKey)
+            const d = edgePath(from, to)
+            const mx = (from.x + from.w + to.x) / 2
+            const my = (from.y + from.h / 2 + to.y + to.h / 2) / 2
+            return html`
+              <g key=${'e' + i}>
+                <path d=${d} fill="none"
+                  stroke=${isActive ? '#000' : '#bbb'}
+                  stroke-width=${isActive ? 2.5 : 1.5}
+                  marker-end=${isActive ? 'url(#arrow-active)' : 'url(#arrow)'}
+                />
+                <text x=${mx} y=${my - 6} text-anchor="middle"
+                  font-size="10" fill=${isActive ? '#000' : '#999'}
+                  font-family="var(--font)">${e.event}</text>
+              </g>
+            `
+          })}
+          ${mergedNodes.map(n => {
+            const pos = positions.get(n.name)
+            if (!pos) return null
+            const isActive = active.activeNodes.has(n.name)
+            const isFocused = focusedProcess === n.name
+            return html`
+              <g key=${n.name} style="cursor:pointer" onClick=${() => onNodeClick && onNodeClick(n.name)}>
+                <rect x=${pos.x} y=${pos.y} width=${pos.w} height=${pos.h} rx="0"
+                  fill=${isActive ? 'var(--accent)' : 'var(--white)'}
+                  stroke="var(--black)"
+                  stroke-width=${isFocused ? 3 : isActive ? 2 : 1.5}
+                />
+                <text x=${pos.x + pos.w / 2} y=${pos.y + 18} text-anchor="middle"
+                  font-size="12" font-weight="700" fill="var(--black)"
+                  font-family="var(--font)">${n.name}</text>
+                <text x=${pos.x + pos.w / 2} y=${pos.y + 33} text-anchor="middle"
+                  font-size="9" fill="var(--muted)"
+                  font-family="var(--font)">on: ${n.on}</text>
+              </g>
+            `
+          })}
+        </svg>
+      </div>
+      <div class="graph-legend">
+        <span><span class="graph-swatch graph-swatch-static"></span> declared</span>
+        <span><span class="graph-swatch graph-swatch-active"></span> executed</span>
+      </div>
+    </div>
+  `
+}
+
 // ─── App ─────────────────────────────────────────────────────
 
 function App() {
@@ -968,6 +1257,7 @@ function App() {
     selectedStepIdx: -1,
     stepDetail: { run: null, effects: [] },
   })
+  const [graphMode, setGraphMode] = useState(null)
   const [emit, setEmit] = useState({
     eventName: '',
     payload: '{}',
@@ -1147,6 +1437,12 @@ function App() {
         } catch {}
       }, 50)
     },
+
+    viewInGraph: async (rootId) => {
+      actions.closeOverlay()
+      setActiveTab('graph')
+      setGraphMode({ chain: rootId })
+    },
   }
 
   // ─── Emit submit ───
@@ -1195,13 +1491,21 @@ function App() {
         <${OverviewPanel} health=${health} recentRuns=${recentRuns} onRowClick=${actions.openOverlay} activeRunId=${overlay.open ? overlay.runId : null} />
       `}
       ${activeTab === 'processes' && html`
-        <${ProcessesPanel} processes=${health.processes} onEmit=${emitFromProcess} />
+        <${ProcessesPanel} processes=${health.processes} onEmit=${emitFromProcess} onGraph=${(name) => {
+          setActiveTab('graph')
+          setGraphMode({ process: name })
+        }} />
       `}
       ${activeTab === 'runs' && html`
         <${RunsPanel} onRowClick=${actions.openOverlay} activeRunId=${overlay.open ? overlay.runId : null} />
       `}
       ${activeTab === 'trace' && html`
         <${TracePanel} onSpanClick=${actions.openOverlay} />
+      `}
+      ${activeTab === 'graph' && html`
+        <${GraphPanel} mode=${graphMode} onNodeClick=${(name) => {
+          setGraphMode({ process: name })
+        }} />
       `}
       ${activeTab === 'emit' && html`
         <${EmitPanel} emit=${emit} onUpdate=${(patch) => setEmit(prev => ({ ...prev, ...patch }))} onSubmit=${onEmitSubmit} />
