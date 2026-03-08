@@ -545,7 +545,7 @@ export interface Engine {
    * @param handler - The handler function.
    * @param opts - Optional retry policy and version.
    */
-  register(name: string, eventName: string, handler: Handler, opts?: { retry?: RetryPolicy; version?: string; singleton?: boolean }): void
+  register(name: string, eventName: string, handler: Handler, opts?: { retry?: RetryPolicy; version?: string; singleton?: boolean; emits?: string[] }): void
 
   /**
    * Register a process handler with schema validation.
