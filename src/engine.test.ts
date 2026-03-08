@@ -544,6 +544,29 @@ function engineTests(label: string, opts: EngineOptions) {
         expect(received).toMatchObject({ orderId: 'xyz', approved: true })
       })
 
+      it('resume clears deferred flag so run is no longer deferred', async () => {
+        engine = createEngine(opts)
+        engine.register('step1', 'start', async () => ({
+          success: true,
+          triggerEvent: 'continue',
+          deferred: true,
+          payload: { orderId: 'xyz' },
+        }))
+        engine.register('step2', 'continue', async () => ({ success: true }))
+
+        await engine.emitAndWait('start', {})
+        const deferred = engine.getCompleted()[0]
+        expect(deferred.result?.deferred).toBe(true)
+
+        engine.resume(deferred.id, { approved: true })
+        await engine.drain()
+
+        const after = engine.getRun(deferred.id)!
+        expect(after.result?.deferred).toBe(false)
+        // Cannot resume again
+        expect(() => engine.resume(deferred.id)).toThrow(/not deferred/)
+      })
+
       it('resume throws on non-completed run', async () => {
         engine = createEngine(opts)
         engine.register('proc', 'start', async () => {

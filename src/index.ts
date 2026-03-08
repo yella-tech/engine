@@ -285,6 +285,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     if (!run.result?.deferred) throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Run is not deferred`)
     const mergedPayload = payload !== undefined ? { ...(run.result.payload as any), ...payload } : run.result.payload
     const runs = bus.enqueue(run.result.triggerEvent, mergedPayload, run.id, run.correlationId, run.context)
+    runStore.setResult(runId, { ...run.result, deferred: false })
     dispatcher.kick()
     return runs
   }
