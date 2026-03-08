@@ -51,7 +51,9 @@ function retryTests(label: string, opts: EngineOptions) {
       engine = createEngine({ ...opts, retry: { maxRetries: 1, delay: 100 } })
       let calls = 0
       let firstFailResolve: () => void
-      const firstFailed = new Promise<void>((r) => { firstFailResolve = r })
+      const firstFailed = new Promise<void>((r) => {
+        firstFailResolve = r
+      })
       engine.register('proc', 'go', async () => {
         calls++
         if (calls === 1) {
