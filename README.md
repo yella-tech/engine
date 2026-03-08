@@ -1,7 +1,7 @@
 # @yellatech/engine
 
 [![CI](https://github.com/yella-tech/engine/actions/workflows/ci.yml/badge.svg)](https://github.com/yella-tech/engine/actions/workflows/ci.yml)
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Durable TypeScript runtime for agents and automations. Effects store their results, retries pick up where you left off.
 
@@ -141,6 +141,4 @@ Full documentation, architecture guide, and API reference at [yella.tech](https:
 
 ## License
 
-[AGPL-3.0-only](LICENSE)
-
-This is a copyleft license. You can use, modify, and distribute the code freely. If you offer a modified version as a network service, you must make your source available under the same license. For most self-hosted and internal use, this has no practical impact.
+[MIT](LICENSE)

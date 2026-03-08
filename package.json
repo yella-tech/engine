@@ -33,7 +33,7 @@
     "side-effects"
   ],
   "author": "jorgt",
-  "license": "AGPL-3.0-only",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/yella-tech/engine.git"
