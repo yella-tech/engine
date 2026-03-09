@@ -36,17 +36,14 @@ function App() {
                 ctx.navigate('/emit')
                 ctx.setEmit({ eventName: event, payload: '{}', idempotencyKey: '', result: null, submitting: false, focusPayload: false })
               }}
-              onGraph={(name) => {
-                ctx.navigate('/graph')
-                ctx.setGraphMode({ process: name })
-              }}
+              onGraph={(name) => ctx.navigate('/graph')}
             />
           )
         case 'runs':
           return <RunsPanel onRowClick={ctx.overlayActions.openOverlay} activeRunId={ctx.overlay.open ? ctx.overlay.runId : null} />
         case 'trace':
         case 'trace-detail':
-          return <TracePanel onSpanClick={ctx.overlayActions.openOverlay} />
+          return <TracePanel chainId={ctx.route.params.chainId} onSpanClick={ctx.overlayActions.openOverlay} />
         case 'graph':
         case 'graph-detail':
           return (

@@ -208,35 +208,14 @@ export function DashboardShell({ config }: { config: DashboardConfig }) {
       })
     },
 
-    viewInTrace: async (rootId: string) => {
+    viewInTrace: (rootId: string) => {
       overlayActions.closeOverlay()
-      navigate('/trace')
-      setTimeout(async () => {
-        const tp = (window as any).__tracePanel
-        if (!tp) return
-        try {
-          const data = await api('/runs?limit=100&root=true')
-          const runs = data.runs || []
-          tp.setOptions(
-            runs.map((r: any) => {
-              const when = new Date(r.startedAt).toLocaleTimeString()
-              const hasChain = r.childRunIds && r.childRunIds.length > 0
-              return { id: r.id, label: `${r.processName} / ${r.eventName}${hasChain ? ' \u25B8 chain' : ''} \u2014 ${when}` }
-            }),
-          )
-        } catch {}
-        tp.setSelectedId(rootId)
-        try {
-          const traceData = await api('/runs/' + rootId + '/trace')
-          tp.setTraceData(traceData)
-        } catch {}
-      }, 50)
+      navigate(`/trace/${rootId}`)
     },
 
-    viewInGraph: async (rootId: string) => {
+    viewInGraph: (rootId: string) => {
       overlayActions.closeOverlay()
-      navigate('/graph')
-      setGraphMode({ chain: rootId })
+      navigate(`/graph/${rootId}`)
     },
   }
 
