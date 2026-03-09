@@ -27,8 +27,6 @@ export interface DashboardContext {
   emit: EmitState
   setEmit: (s: EmitState | ((prev: EmitState) => EmitState)) => void
   addTicker: (node: ComponentChildren) => void
-  graphMode: { process?: string; chain?: string } | null
-  setGraphMode: (mode: { process?: string; chain?: string } | null) => void
 }
 
 export function DashboardShell({ config }: { config: DashboardConfig }) {
@@ -44,7 +42,6 @@ export function DashboardShell({ config }: { config: DashboardConfig }) {
     selectedStepIdx: -1,
     stepDetail: { run: null, effects: [] },
   })
-  const [graphMode, setGraphMode] = useState<{ process?: string; chain?: string } | null>(null)
   const [emit, setEmit] = useState<EmitState>({
     eventName: '',
     payload: '{}',
@@ -229,8 +226,6 @@ export function DashboardShell({ config }: { config: DashboardConfig }) {
     emit,
     setEmit,
     addTicker,
-    graphMode,
-    setGraphMode,
   }
 
   return (

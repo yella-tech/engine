@@ -46,14 +46,7 @@ function App() {
           return <TracePanel chainId={ctx.route.params.chainId} onSpanClick={ctx.overlayActions.openOverlay} />
         case 'graph':
         case 'graph-detail':
-          return (
-            <GraphPanel
-              mode={ctx.graphMode}
-              onNodeClick={(name) => {
-                ctx.setGraphMode({ process: name })
-              }}
-            />
-          )
+          return <GraphPanel chainId={ctx.route.params.chainId} onNodeClick={ctx.overlayActions.openOverlay} />
         case 'emit':
           return <EmitPanel emit={ctx.emit} onUpdate={(patch) => ctx.setEmit((prev) => ({ ...prev, ...patch }))} onSubmit={() => handleEmit(ctx)} />
         default:

@@ -1,0 +1,325 @@
+import { useState, useEffect } from 'preact/hooks'
+import { api } from '../lib/api'
+
+const NODE_W = 180
+const NODE_H = 56
+const LAYER_GAP_Y = 80
+const NODE_GAP_X = 32
+const PAD = 40
+
+interface GraphNode {
+  name: string
+  on: string
+  emits?: string[]
+}
+
+interface GraphEdge {
+  from: string
+  event: string
+  to: string
+}
+
+interface ExecutedNode {
+  processName: string
+  runId: string
+  state: string
+  duration?: number
+}
+
+interface Pos {
+  x: number
+  y: number
+}
+
+function layoutTree(nodes: GraphNode[], edges: GraphEdge[]) {
+  const adj = new Map<string, string[]>()
+  const inbound = new Map<string, number>()
+  for (const n of nodes) {
+    adj.set(n.name, [])
+    inbound.set(n.name, 0)
+  }
+  for (const e of edges) {
+    if (adj.has(e.from) && inbound.has(e.to)) {
+      adj.get(e.from)!.push(e.to)
+      inbound.set(e.to, (inbound.get(e.to) || 0) + 1)
+    }
+  }
+
+  // BFS from roots
+  const layers = new Map<string, number>()
+  const queue: string[] = []
+  for (const n of nodes) {
+    if ((inbound.get(n.name) || 0) === 0) {
+      layers.set(n.name, 0)
+      queue.push(n.name)
+    }
+  }
+  while (queue.length > 0) {
+    const cur = queue.shift()!
+    const curLayer = layers.get(cur)!
+    for (const next of adj.get(cur) || []) {
+      const prev = layers.get(next)
+      const newLayer = curLayer + 1
+      if (prev === undefined || newLayer > prev) {
+        layers.set(next, newLayer)
+        queue.push(next)
+      }
+    }
+  }
+  // Orphans
+  for (const n of nodes) {
+    if (!layers.has(n.name)) layers.set(n.name, 0)
+  }
+
+  // Group by layer
+  const byLayer = new Map<number, string[]>()
+  for (const n of nodes) {
+    const l = layers.get(n.name)!
+    if (!byLayer.has(l)) byLayer.set(l, [])
+    byLayer.get(l)!.push(n.name)
+  }
+
+  const maxLayer = Math.max(0, ...byLayer.keys())
+  const positions = new Map<string, Pos>()
+
+  for (let l = 0; l <= maxLayer; l++) {
+    const col = byLayer.get(l) || []
+    const totalW = col.length * NODE_W + (col.length - 1) * NODE_GAP_X
+    const startX = PAD + (col.length > 1 ? 0 : 0)
+    col.forEach((name, i) => {
+      positions.set(name, {
+        x: startX + i * (NODE_W + NODE_GAP_X),
+        y: PAD + l * (NODE_H + LAYER_GAP_Y),
+      })
+    })
+  }
+
+  // Center layers relative to widest
+  let maxWidth = 0
+  for (let l = 0; l <= maxLayer; l++) {
+    const col = byLayer.get(l) || []
+    const w = col.length * NODE_W + (col.length - 1) * NODE_GAP_X
+    if (w > maxWidth) maxWidth = w
+  }
+  for (let l = 0; l <= maxLayer; l++) {
+    const col = byLayer.get(l) || []
+    const w = col.length * NODE_W + (col.length - 1) * NODE_GAP_X
+    const offset = (maxWidth - w) / 2
+    for (const name of col) {
+      const p = positions.get(name)!
+      positions.set(name, { x: p.x + offset, y: p.y })
+    }
+  }
+
+  const allPos = [...positions.values()]
+  const svgW = allPos.length ? Math.max(...allPos.map((p) => p.x + NODE_W)) + PAD : 400
+  const svgH = allPos.length ? Math.max(...allPos.map((p) => p.y + NODE_H)) + PAD : 200
+
+  return { positions, svgW, svgH }
+}
+
+function edgePath(from: Pos, to: Pos) {
+  const x1 = from.x + NODE_W / 2
+  const y1 = from.y + NODE_H
+  const x2 = to.x + NODE_W / 2
+  const y2 = to.y
+  const dy = (y2 - y1) * 0.5
+  return `M${x1},${y1} C${x1},${y1 + dy} ${x2},${y2 - dy} ${x2},${y2}`
+}
+
+function fmtDuration(ms?: number) {
+  if (ms == null) return ''
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
+export interface GraphPanelProps {
+  chainId?: string
+  onNodeClick?: (runId: string) => void
+}
+
+export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
+  const [graphData, setGraphData] = useState<{ nodes: GraphNode[]; edges: GraphEdge[] } | null>(null)
+  const [chainRuns, setChainRuns] = useState<any[] | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    ;(async () => {
+      setLoading(true)
+      try {
+        const data = await api('/graph')
+        setGraphData(data)
+      } catch {}
+      setLoading(false)
+    })()
+  }, [])
+
+  useEffect(() => {
+    if (chainId) {
+      ;(async () => {
+        try {
+          const data = await api('/runs/' + chainId + '/chain')
+          setChainRuns((data.runs || []).sort((a: any, b: any) => (a.depth ?? 0) - (b.depth ?? 0) || a.startedAt - b.startedAt))
+        } catch {
+          setChainRuns(null)
+        }
+      })()
+    } else {
+      setChainRuns(null)
+    }
+  }, [chainId])
+
+  if (loading) return <div class="empty">Loading graph...</div>
+
+  const nodes: GraphNode[] = graphData ? graphData.nodes || [] : []
+  const edges: GraphEdge[] = graphData ? graphData.edges || [] : []
+
+  // Merge runtime-only nodes/edges from chain data
+  let mergedNodes = [...nodes]
+  let mergedEdges = [...edges]
+
+  const executedMap = new Map<string, ExecutedNode>()
+  const executedEdges = new Set<string>()
+
+  if (chainRuns) {
+    const byId = new Map<string, any>()
+    for (const r of chainRuns) {
+      byId.set(r.id, r)
+      executedMap.set(r.processName, {
+        processName: r.processName,
+        runId: r.id,
+        state: r.state,
+        duration: r.duration,
+      })
+    }
+    // Build executed edges
+    for (const r of chainRuns) {
+      if (r.parentRunId) {
+        const parent = byId.get(r.parentRunId)
+        if (parent) {
+          executedEdges.add(`${parent.processName}:${r.eventName}:${r.processName}`)
+        }
+      }
+    }
+    // Add runtime-only nodes
+    const existingNames = new Set(nodes.map((n) => n.name))
+    for (const r of chainRuns) {
+      if (!existingNames.has(r.processName)) {
+        mergedNodes.push({ name: r.processName, on: r.eventName, emits: [] })
+        existingNames.add(r.processName)
+      }
+    }
+    // Add runtime-only edges
+    const existingEdgeKeys = new Set(edges.map((e) => `${e.from}:${e.event}:${e.to}`))
+    for (const r of chainRuns) {
+      if (r.parentRunId) {
+        const parent = byId.get(r.parentRunId)
+        if (parent) {
+          const key = `${parent.processName}:${r.eventName}:${r.processName}`
+          if (!existingEdgeKeys.has(key)) {
+            mergedEdges.push({ from: parent.processName, event: r.eventName, to: r.processName })
+            existingEdgeKeys.add(key)
+          }
+        }
+      }
+    }
+  }
+
+  if (mergedNodes.length === 0) {
+    return (
+      <div class="graph-empty">
+        No graph data. Declare <code>emits</code> on your processes or select a run to see its execution flow.
+      </div>
+    )
+  }
+
+  const { positions, svgW, svgH } = layoutTree(mergedNodes, mergedEdges)
+  const hasChain = chainRuns != null && chainRuns.length > 0
+
+  return (
+    <div>
+      <div class="graph-container">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${svgW} ${svgH}`} style={`width:${svgW}px;max-width:100%;height:auto;display:block`}>
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#999" />
+            </marker>
+            <marker id="arrow-active" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#000" />
+            </marker>
+          </defs>
+          {/* Render edges — ghost first, then executed on top */}
+          {mergedEdges.map((e, i) => {
+            const from = positions.get(e.from)
+            const to = positions.get(e.to)
+            if (!from || !to) return null
+            const eKey = `${e.from}:${e.event}:${e.to}`
+            const isExecuted = executedEdges.has(eKey)
+            const d = edgePath(from, to)
+            const mx = (from.x + NODE_W / 2 + to.x + NODE_W / 2) / 2
+            const my = (from.y + NODE_H + to.y) / 2
+            return (
+              <g key={'e' + i}>
+                <path
+                  d={d}
+                  fill="none"
+                  stroke={isExecuted ? '#000' : '#bbb'}
+                  stroke-width={isExecuted ? 2.5 : 1.5}
+                  stroke-dasharray={isExecuted ? undefined : '6 3'}
+                  marker-end={isExecuted ? 'url(#arrow-active)' : 'url(#arrow)'}
+                />
+                <text x={mx} y={my - 6} text-anchor="middle" font-size="10" fill={isExecuted ? '#000' : '#999'} font-family="var(--font)">
+                  {e.event}
+                </text>
+              </g>
+            )
+          })}
+          {/* Render nodes */}
+          {mergedNodes.map((n) => {
+            const pos = positions.get(n.name)
+            if (!pos) return null
+            const exec = executedMap.get(n.name)
+            const isExecuted = !!exec
+            const clickable = isExecuted && onNodeClick
+            return (
+              <g key={n.name} style={clickable ? 'cursor:pointer' : undefined} onClick={() => clickable && onNodeClick!(exec!.runId)}>
+                <rect
+                  x={pos.x}
+                  y={pos.y}
+                  width={NODE_W}
+                  height={NODE_H}
+                  rx="0"
+                  fill={isExecuted ? 'var(--accent)' : 'var(--white)'}
+                  stroke={isExecuted ? 'var(--black)' : '#ccc'}
+                  stroke-width={isExecuted ? 2 : 1.5}
+                  stroke-dasharray={isExecuted ? undefined : '6 3'}
+                />
+                <text x={pos.x + NODE_W / 2} y={pos.y + 22} text-anchor="middle" font-size="12" font-weight="700" fill="var(--black)" font-family="var(--font)">
+                  {n.name.toUpperCase()}
+                </text>
+                {isExecuted ? (
+                  <text x={pos.x + NODE_W / 2} y={pos.y + 40} text-anchor="middle" font-size="9" fill="var(--black)" font-family="var(--font)">
+                    {exec!.state.toUpperCase()}
+                    {exec!.duration != null ? ` · ${fmtDuration(exec!.duration)}` : ''}
+                  </text>
+                ) : (
+                  <text x={pos.x + NODE_W / 2} y={pos.y + 40} text-anchor="middle" font-size="9" fill="#999" font-family="var(--font)">
+                    on: {n.on}
+                  </text>
+                )}
+              </g>
+            )
+          })}
+        </svg>
+      </div>
+      <div class="graph-legend">
+        <span>
+          <span class="graph-swatch graph-swatch-active"></span> executed
+        </span>
+        <span>
+          <span class="graph-swatch graph-swatch-static"></span> declared
+        </span>
+      </div>
+    </div>
+  )
+}
