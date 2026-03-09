@@ -185,20 +185,8 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   type RegisterOpts = { retry?: RetryPolicy; version?: string; singleton?: boolean; emits?: string[] }
 
   function register(name: string, eventName: string, handler: Handler, opts?: RegisterOpts): void
-  function register<T>(
-    name: string,
-    eventName: string,
-    schema: Schema<T>,
-    handler: (ctx: HandlerContext<T>) => Promise<HandlerResult> | HandlerResult,
-    opts?: RegisterOpts,
-  ): void
-  function register(
-    name: string,
-    eventName: string,
-    schemaOrHandler: Schema | Handler,
-    maybeHandlerOrOpts?: Handler | RegisterOpts,
-    maybeOpts?: RegisterOpts,
-  ): void {
+  function register<T>(name: string, eventName: string, schema: Schema<T>, handler: (ctx: HandlerContext<T>) => Promise<HandlerResult> | HandlerResult, opts?: RegisterOpts): void
+  function register(name: string, eventName: string, schemaOrHandler: Schema | Handler, maybeHandlerOrOpts?: Handler | RegisterOpts, maybeOpts?: RegisterOpts): void {
     if (typeof maybeHandlerOrOpts === 'function') {
       registry.register(name, eventName, schemaOrHandler as Schema, maybeHandlerOrOpts, maybeOpts)
     } else {
