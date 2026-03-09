@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'preact/hooks'
+import { useState, useEffect, useCallback } from 'preact/hooks'
+import { navigate } from '../hooks/useHashRoute'
 import { api } from '../lib/api'
 
 const NODE_W = 180
@@ -141,14 +142,24 @@ export interface GraphPanelProps {
 export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
   const [graphData, setGraphData] = useState<{ nodes: GraphNode[]; edges: GraphEdge[] } | null>(null)
   const [chainRuns, setChainRuns] = useState<any[] | null>(null)
+  const [chainOptions, setChainOptions] = useState<{ id: string; label: string }[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     ;(async () => {
       setLoading(true)
       try {
-        const data = await api('/graph')
-        setGraphData(data)
+        const [graphRes, runsRes] = await Promise.all([api('/graph'), api('/runs?limit=100&root=true')])
+        setGraphData(graphRes)
+        const runs = runsRes.runs || []
+        setChainOptions(
+          runs
+            .filter((r: any) => r.childRunIds && r.childRunIds.length > 0)
+            .map((r: any) => {
+              const when = new Date(r.startedAt).toLocaleTimeString()
+              return { id: r.id, label: `${r.processName} / ${r.eventName} \u25B8 chain \u2014 ${when}` }
+            }),
+        )
       } catch {}
       setLoading(false)
     })()
@@ -251,27 +262,51 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
     mergedEdges = [...edges]
   }
 
-  if (mergedNodes.length === 0) {
-    return (
-      <div class="graph-empty">
-        No graph data. Declare <code>emits</code> on your processes to see the dependency graph, or view a run's graph from the overlay.
-      </div>
-    )
-  }
+  const hasStaticGraph = !chainRuns && mergedEdges.length > 0
+  const showGraph = mergedNodes.length > 0 && (chainRuns || hasStaticGraph)
 
-  if (!chainRuns && mergedEdges.length === 0) {
+  const picker = (
+    <div class="field mb-5">
+      <span class="label">Select a completed chain to graph</span>
+      <select
+        class="select"
+        value={chainId || ''}
+        onChange={(e) => {
+          const v = (e.target as HTMLSelectElement).value
+          navigate(v ? `/graph/${v}` : '/graph')
+        }}
+      >
+        <option value="">-- select a chain --</option>
+        {chainOptions.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+
+  if (!showGraph) {
     return (
-      <div class="graph-empty">
-        {mergedNodes.length} processes registered but no relationships declared. Add <code>emits</code> to your process registrations to see the dependency graph.
+      <div>
+        {picker}
+        {!chainRuns && mergedNodes.length > 0 && (
+          <div class="graph-empty">
+            {mergedNodes.length} processes registered but no relationships declared. Add <code>emits</code> to your process registrations to see the dependency graph, or select a chain above.
+          </div>
+        )}
+        {mergedNodes.length === 0 && (
+          <div class="graph-empty">No processes registered.</div>
+        )}
       </div>
     )
   }
 
   const { positions, svgW, svgH } = layoutTree(mergedNodes, mergedEdges)
-  const hasChain = chainRuns != null && chainRuns.length > 0
 
   return (
     <div>
+      {picker}
       <div class="graph-container">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${svgW} ${svgH}`} style={`width:${svgW}px;max-width:100%;height:auto;display:block`}>
           <defs>
