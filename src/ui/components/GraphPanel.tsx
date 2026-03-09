@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'preact/hooks'
+import { useState, useCallback } from 'preact/hooks'
 import { navigate } from '../hooks/useHashRoute'
+import { usePolling } from '../hooks/usePolling'
 import { api } from '../lib/api'
 
 const NODE_W = 180
@@ -145,40 +146,31 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
   const [chainOptions, setChainOptions] = useState<{ id: string; label: string }[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    ;(async () => {
-      setLoading(true)
-      try {
-        const [graphRes, runsRes] = await Promise.all([api('/graph'), api('/runs?limit=100&root=true')])
-        setGraphData(graphRes)
-        const runs = runsRes.runs || []
-        setChainOptions(
-          runs
-            .filter((r: any) => r.childRunIds && r.childRunIds.length > 0)
-            .map((r: any) => {
-              const when = new Date(r.startedAt).toLocaleTimeString()
-              return { id: r.id, label: `${r.processName} / ${r.eventName} \u25B8 chain \u2014 ${when}` }
-            }),
-        )
-      } catch {}
-      setLoading(false)
-    })()
-  }, [])
-
-  useEffect(() => {
-    if (chainId) {
-      ;(async () => {
-        try {
-          const data = await api('/runs/' + chainId + '/chain')
-          setChainRuns((data.runs || []).sort((a: any, b: any) => (a.depth ?? 0) - (b.depth ?? 0) || a.startedAt - b.startedAt))
-        } catch {
-          setChainRuns(null)
-        }
-      })()
-    } else {
-      setChainRuns(null)
-    }
+  const fetchData = useCallback(async () => {
+    try {
+      const fetches: Promise<any>[] = [api('/graph'), api('/runs?limit=100&root=true')]
+      if (chainId) fetches.push(api('/runs/' + chainId + '/chain'))
+      const [graphRes, runsRes, chainRes] = await Promise.all(fetches)
+      setGraphData(graphRes)
+      const runs = runsRes.runs || []
+      setChainOptions(
+        runs
+          .filter((r: any) => r.childRunIds && r.childRunIds.length > 0)
+          .map((r: any) => {
+            const when = new Date(r.startedAt).toLocaleTimeString()
+            return { id: r.id, label: `${r.processName} / ${r.eventName} \u25B8 chain \u2014 ${when}` }
+          }),
+      )
+      if (chainId && chainRes) {
+        setChainRuns((chainRes.runs || []).sort((a: any, b: any) => (a.depth ?? 0) - (b.depth ?? 0) || a.startedAt - b.startedAt))
+      } else {
+        setChainRuns(null)
+      }
+    } catch {}
+    setLoading(false)
   }, [chainId])
+
+  usePolling(fetchData, 3000, true)
 
   if (loading) return <div class="empty">Loading graph...</div>
 
@@ -349,7 +341,11 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
             if (!pos) return null
             const exec = executedMap.get(n.name)
             const isExecuted = !!exec
+            const isErrored = exec?.state === 'errored' || exec?.state === 'dead'
+            const isIdle = exec?.state === 'idle'
             const clickable = isExecuted && onNodeClick
+            const nodeFill = isErrored ? 'var(--black)' : isIdle ? '#eee' : isExecuted ? 'var(--accent)' : 'var(--white)'
+            const nodeText = isErrored ? 'var(--white)' : 'var(--black)'
             return (
               <g key={n.name} style={clickable ? 'cursor:pointer' : undefined} onClick={() => clickable && onNodeClick!(exec!.runId)}>
                 <rect
@@ -358,16 +354,16 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
                   width={NODE_W}
                   height={NODE_H}
                   rx="0"
-                  fill={isExecuted ? 'var(--accent)' : 'var(--white)'}
+                  fill={nodeFill}
                   stroke={isExecuted ? 'var(--black)' : '#ccc'}
                   stroke-width={isExecuted ? 2 : 1.5}
                   stroke-dasharray={isExecuted ? undefined : '6 3'}
                 />
-                <text x={pos.x + NODE_W / 2} y={pos.y + 22} text-anchor="middle" font-size="12" font-weight="700" fill="var(--black)" font-family="var(--font)">
+                <text x={pos.x + NODE_W / 2} y={pos.y + 22} text-anchor="middle" font-size="12" font-weight="700" fill={nodeText} font-family="var(--font)">
                   {n.name.toUpperCase()}
                 </text>
                 {isExecuted ? (
-                  <text x={pos.x + NODE_W / 2} y={pos.y + 40} text-anchor="middle" font-size="9" fill="var(--black)" font-family="var(--font)">
+                  <text x={pos.x + NODE_W / 2} y={pos.y + 40} text-anchor="middle" font-size="9" fill={nodeText} font-family="var(--font)">
                     {exec!.state.toUpperCase()}
                     {exec!.duration != null ? ` · ${fmtDuration(exec!.duration)}` : ''}
                   </text>

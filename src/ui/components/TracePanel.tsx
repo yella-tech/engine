@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect } from 'preact/hooks'
+import { useState, useCallback, useRef } from 'preact/hooks'
 import { TracePicker } from './TracePicker'
 import { GanttChart } from './GanttChart'
+import { usePolling } from '../hooks/usePolling'
 import { api } from '../lib/api'
 
 export function TracePanel({ chainId, onSpanClick }: { chainId?: string; onSpanClick: (id: string) => void }) {
@@ -8,12 +9,14 @@ export function TracePanel({ chainId, onSpanClick }: { chainId?: string; onSpanC
   const [selectedId, setSelectedId] = useState('')
   const [traceData, setTraceData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const activeId = chainId || selectedId
 
-  const loadOptions = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     try {
-      const data = await api('/runs?limit=100&root=true')
-      const runs = data.runs || []
-
+      const fetches: Promise<any>[] = [api('/runs?limit=100&root=true')]
+      if (activeId) fetches.push(api('/runs/' + activeId + '/trace'))
+      const [runsRes, traceRes] = await Promise.all(fetches)
+      const runs = runsRes.runs || []
       setOptions(
         runs.map((r: any) => {
           const when = new Date(r.startedAt).toLocaleTimeString()
@@ -21,34 +24,19 @@ export function TracePanel({ chainId, onSpanClick }: { chainId?: string; onSpanC
           return { id: r.id, label: `${r.processName} / ${r.eventName}${hasChain ? ' \u25B8 chain' : ''} \u2014 ${when}` }
         }),
       )
+      if (activeId && traceRes) {
+        setTraceData(traceRes)
+      }
     } catch {}
-  }, [])
-
-  useEffect(() => {
-    loadOptions()
-  }, [])
-
-  const onSelect = useCallback(async (id: string) => {
-    setSelectedId(id)
-    if (!id) {
-      setTraceData(null)
-      return
-    }
-    setLoading(true)
-    try {
-      const data = await api('/runs/' + id + '/trace')
-      setTraceData(data)
-    } catch {
-      setTraceData(null)
-    }
     setLoading(false)
-  }, [])
+  }, [activeId])
 
-  useEffect(() => {
-    if (chainId) {
-      onSelect(chainId)
-    }
-  }, [chainId])
+  usePolling(fetchData, 3000, true)
+
+  const onSelect = useCallback((id: string) => {
+    setSelectedId(id)
+    if (!id) setTraceData(null)
+  }, [])
 
   return (
     <div>
