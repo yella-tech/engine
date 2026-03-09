@@ -56,6 +56,9 @@ export type {
 export { EngineError, ErrorCode, VALID_TRANSITIONS } from './types.js'
 export { createEffectStore } from './effect.js'
 export { createSqliteStores } from './run-sqlite.js'
+export { registerRoutes } from './server/routes.js'
+export type { RoutableEngine } from './server/routes.js'
+export { serveDashboard, createDevServer } from './server/index.js'
 
 function buildStores(opts: EngineOptions): { runStore: RunStore; effectStore: EffectStore; close?: () => void } {
   if (opts.store === 'memory') {
@@ -145,7 +148,8 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   if (opts.server) {
     const serverOpts = opts.server
     serverPromise = import('./server/index.js').then(async ({ createDevServer }) => {
-      const raw = await createDevServer(engine, serverOpts)
+      const raw = createDevServer(engine)
+      await raw.serve({ host: serverOpts.host, port: serverOpts.port })
       return {
         ...raw,
         stop: async () => {

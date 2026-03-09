@@ -809,6 +809,8 @@ export type DevServer = {
   address: { host: string; port: number }
   /** The Hono app instance, exposed for adding custom routes. */
   app: import('hono').Hono
+  /** Bind the server to a port and start listening. */
+  serve(opts?: { host?: string; port?: number }): Promise<{ host: string; port: number }>
   /** Stop the dev server. */
   stop(): Promise<void>
 }

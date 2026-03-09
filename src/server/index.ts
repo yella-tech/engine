@@ -3,7 +3,8 @@ import path from 'node:path'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serve } from '@hono/node-server'
-import type { Engine, DevServer, DevServerOptions } from '../types.js'
+import type { DevServer } from '../types.js'
+import type { RoutableEngine } from './routes.js'
 import { registerRoutes } from './routes.js'
 
 function readFileOr(filePath: string, fallback: string): string {
@@ -69,26 +70,36 @@ function safeReadDir(dir: string): string[] {
   }
 }
 
-export function createDevServer(engine: Engine, opts?: DevServerOptions): Promise<DevServer> {
-  const host = opts?.host ?? '127.0.0.1'
-  const port = opts?.port ?? 3000
-
+export function createDevServer(engine: RoutableEngine): DevServer {
   const app = new Hono()
   app.use('*', cors())
 
   registerRoutes(app, engine)
   serveDashboard(app)
 
-  return new Promise<DevServer>((resolve) => {
-    const server = serve({ fetch: app.fetch, hostname: host, port }, (info) => {
-      resolve({
-        address: { host: info.address as string, port: info.port },
-        app,
-        stop: () =>
-          new Promise<void>((res, rej) => {
-            server.close((err) => (err ? rej(err) : res()))
-          }),
+  let httpServer: ReturnType<typeof serve> | null = null
+  const address = { host: '', port: 0 }
+
+  return {
+    app,
+    address,
+    async serve(opts?: { host?: string; port?: number }) {
+      const host = opts?.host ?? '127.0.0.1'
+      const port = opts?.port ?? 3000
+      return new Promise<{ host: string; port: number }>((resolve) => {
+        httpServer = serve({ fetch: app.fetch, hostname: host, port }, (info) => {
+          const addr = { host: info.address as string, port: info.port }
+          Object.assign(address, addr)
+          resolve(addr)
+        })
       })
-    })
-  })
+    },
+    async stop() {
+      if (!httpServer) return
+      return new Promise<void>((res, rej) => {
+        httpServer!.close((err) => (err ? rej(err) : res()))
+        httpServer = null
+      })
+    },
+  }
 }

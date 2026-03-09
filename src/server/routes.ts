@@ -1,8 +1,23 @@
 import { Hono } from 'hono'
-import type { Engine } from '../types.js'
+import type { Run, ProcessDefinition, EffectRecord, EventGraph } from '../types.js'
 import { buildTraceTree, flattenTrace } from './trace.js'
 
-export function registerRoutes(app: Hono, engine: Engine) {
+export interface RoutableEngine {
+  getRunning(): Run[]
+  getIdle(): Run[]
+  getCompleted(): Run[]
+  getErrored(): Run[]
+  getProcesses(): ProcessDefinition[]
+  getRun(id: string): Run | null
+  getChain(runId: string): Run[]
+  getEffects(runId: string): EffectRecord[]
+  retryRun(runId: string): Run
+  requeueDead(runId: string): Run
+  getGraph(): EventGraph
+  emit(event: string, payload: unknown, opts?: { idempotencyKey?: string }): Run[]
+}
+
+export function registerRoutes(app: Hono, engine: RoutableEngine) {
   app.get('/health', (c) => {
     const running = engine.getRunning()
     const idle = engine.getIdle()
