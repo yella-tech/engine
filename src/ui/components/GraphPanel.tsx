@@ -174,14 +174,16 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
   const nodes: GraphNode[] = graphData ? graphData.nodes || [] : []
   const edges: GraphEdge[] = graphData ? graphData.edges || [] : []
 
-  // Merge runtime-only nodes/edges from chain data
-  let mergedNodes = [...nodes]
-  let mergedEdges = [...edges]
-
   const executedMap = new Map<string, ExecutedNode>()
   const executedEdges = new Set<string>()
 
-  if (chainRuns) {
+  // When viewing a chain, filter to only relevant processes:
+  // - Executed processes
+  // - Declared emits targets of executed processes (paths not taken)
+  let mergedNodes: GraphNode[]
+  let mergedEdges: GraphEdge[]
+
+  if (chainRuns && chainRuns.length > 0) {
     const byId = new Map<string, any>()
     for (const r of chainRuns) {
       byId.set(r.id, r)
@@ -201,16 +203,37 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
         }
       }
     }
-    // Add runtime-only nodes
-    const existingNames = new Set(nodes.map((n) => n.name))
-    for (const r of chainRuns) {
-      if (!existingNames.has(r.processName)) {
-        mergedNodes.push({ name: r.processName, on: r.eventName, emits: [] })
-        existingNames.add(r.processName)
+
+    // Build the relevant node set: executed + declared emits targets
+    const relevantNames = new Set(chainRuns.map((r: any) => r.processName))
+    // For each executed process, find its declared emits targets in the static graph
+    for (const e of edges) {
+      if (relevantNames.has(e.from)) {
+        relevantNames.add(e.to)
       }
     }
+
+    // Filter to relevant nodes only
+    const nodeByName = new Map(nodes.map((n) => [n.name, n]))
+    mergedNodes = []
+    const addedNames = new Set<string>()
+    for (const name of relevantNames) {
+      if (addedNames.has(name)) continue
+      addedNames.add(name)
+      const existing = nodeByName.get(name)
+      if (existing) {
+        mergedNodes.push(existing)
+      } else {
+        // Runtime-only node (not in static graph)
+        const run = chainRuns.find((r: any) => r.processName === name)
+        mergedNodes.push({ name, on: run?.eventName || '', emits: [] })
+      }
+    }
+
+    // Filter edges to only those between relevant nodes
+    mergedEdges = edges.filter((e) => relevantNames.has(e.from) && relevantNames.has(e.to))
     // Add runtime-only edges
-    const existingEdgeKeys = new Set(edges.map((e) => `${e.from}:${e.event}:${e.to}`))
+    const existingEdgeKeys = new Set(mergedEdges.map((e) => `${e.from}:${e.event}:${e.to}`))
     for (const r of chainRuns) {
       if (r.parentRunId) {
         const parent = byId.get(r.parentRunId)
@@ -223,12 +246,23 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
         }
       }
     }
+  } else {
+    mergedNodes = [...nodes]
+    mergedEdges = [...edges]
   }
 
   if (mergedNodes.length === 0) {
     return (
       <div class="graph-empty">
-        No graph data. Declare <code>emits</code> on your processes or select a run to see its execution flow.
+        No graph data. Declare <code>emits</code> on your processes to see the dependency graph, or view a run's graph from the overlay.
+      </div>
+    )
+  }
+
+  if (!chainRuns && mergedEdges.length === 0) {
+    return (
+      <div class="graph-empty">
+        {mergedNodes.length} processes registered but no relationships declared. Add <code>emits</code> to your process registrations to see the dependency graph.
       </div>
     )
   }
