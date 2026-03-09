@@ -27,7 +27,7 @@ function App() {
     renderPanel: (tab, ctx) => {
       switch (tab) {
         case 'overview':
-          return <OverviewPanel health={ctx.health} recentRuns={ctx.recentRuns} onRowClick={ctx.overlayActions.openOverlay} activeRunId={ctx.overlay.open ? ctx.overlay.runId : null} />
+          return <OverviewPanel health={ctx.health} recentRuns={ctx.recentRuns} onRowClick={ctx.overlayActions.openOverlay} activeRunId={ctx.overlay.open ? ctx.overlay.runId : null} rootOnly={ctx.overviewRootOnly} onRootOnlyChange={ctx.setOverviewRootOnly} />
         case 'processes':
           return (
             <ProcessesPanel

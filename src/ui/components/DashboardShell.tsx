@@ -27,6 +27,8 @@ export interface DashboardContext {
   emit: EmitState
   setEmit: (s: EmitState | ((prev: EmitState) => EmitState)) => void
   addTicker: (node: ComponentChildren) => void
+  overviewRootOnly: boolean
+  setOverviewRootOnly: (v: boolean) => void
 }
 
 export function DashboardShell({ config }: { config: DashboardConfig }) {
@@ -42,6 +44,7 @@ export function DashboardShell({ config }: { config: DashboardConfig }) {
     selectedStepIdx: -1,
     stepDetail: { run: null, effects: [] },
   })
+  const [overviewRootOnly, setOverviewRootOnly] = useState(false)
   const [emit, setEmit] = useState<EmitState>({
     eventName: '',
     payload: '{}',
@@ -68,7 +71,8 @@ export function DashboardShell({ config }: { config: DashboardConfig }) {
       const data = await api('/health')
       setHealth({ uptime: formatUptime(data.uptime), queue: data.queue || {}, processes: data.processes || [] })
 
-      const runsData = await api('/runs?limit=10')
+      const rootParam = overviewRootOnly ? '&root=true' : ''
+      const runsData = await api('/runs?limit=10' + rootParam)
       const runs = runsData.runs || []
       setRecentRuns({ runs, total: runsData.total ?? runs.length })
 
@@ -87,7 +91,7 @@ export function DashboardShell({ config }: { config: DashboardConfig }) {
     } catch {
       setHealth((prev) => ({ ...prev, uptime: 'offline' }))
     }
-  }, [addTicker])
+  }, [addTicker, overviewRootOnly])
 
   usePolling(fetchHealth, 2000, true)
 
@@ -226,6 +230,8 @@ export function DashboardShell({ config }: { config: DashboardConfig }) {
     emit,
     setEmit,
     addTicker,
+    overviewRootOnly,
+    setOverviewRootOnly,
   }
 
   return (
