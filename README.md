@@ -135,6 +135,30 @@ One line enables a built-in dashboard with Gantt traces of every run.
 const engine = createEngine({ server: { port: 3400 } })
 ```
 
+The dashboard is a Preact app served from built static assets. It includes:
+
+- **Overview** — live stats and recent runs
+- **Processes** — registered process table with event graph visualization
+- **Runs** — filterable run browser with root-only toggle
+- **Trace** — Gantt timeline of execution chains with gap-collapsing
+- **Emit** — manual event emission for testing
+
+### UI Component Library
+
+The dashboard components are exported as a library via `@yellatech/engine/ui` for use by packages that extend the engine (e.g. `@yellatech/conduit`). The `DashboardShell` accepts custom tabs and panels, so consumers can add their own views without forking the dashboard.
+
+### Developing the Dashboard
+
+```bash
+# Terminal 1: run the engine with a server
+npm run dev
+
+# Terminal 2: Vite dev server with HMR (proxies API calls to :3000)
+npm run dev:ui
+```
+
+The Vite dev server runs on port 5173 with hot module replacement. Edit any component in `src/ui/` and see changes instantly.
+
 ## Docs
 
 Full documentation, architecture guide, and API reference at [yella.tech](https://yella.tech).

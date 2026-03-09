@@ -7,7 +7,7 @@ import { createEngine } from '../src/index.js'
 const CONCURRENCY_LEVELS = Array.from({ length: 20 }, (_, i) => i + 1)
 const SHALLOW_EVENTS = 100 // seed events for shallow chain
 const DEEP_EVENTS = 20 // seed events for deep chain
-const DB_PATH = 'load-test.db'
+const DB_PATH = '_db/load-test.db'
 const DRAIN_TIMEOUT_MS = 60_000
 const DASHBOARD_PORT = 3400
 
@@ -130,6 +130,7 @@ type Result = {
 
 async function runLevel(concurrency: number, withServer: boolean): Promise<Result> {
   // Fresh DB each run
+  fs.mkdirSync('_db', { recursive: true })
   if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH)
 
   const engine = createEngine({

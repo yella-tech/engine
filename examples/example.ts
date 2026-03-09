@@ -2,7 +2,8 @@ import fs from 'node:fs'
 import { createEngine } from '../src/index.js'
 
 // Clean up any previous run
-const dbPath = 'runs.db'
+const dbPath = '_db/runs.db'
+fs.mkdirSync('_db', { recursive: true })
 if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath)
 
 const engine = createEngine({

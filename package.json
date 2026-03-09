@@ -7,6 +7,13 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "default": "./dist/server/index.js"
+    },
+    "./ui": {
+      "default": "./dist/ui/ui.js"
     }
   },
   "files": [
@@ -15,8 +22,10 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc",
-    "postbuild": "cp -r src/server/public dist/server/public",
+    "build": "tsc && npm run build:ui",
+    "build:ui": "vite build --config src/ui/vite.config.ts && cp src/ui/production.html dist/ui/index.html",
+    "dev:ui": "vite dev --config src/ui/vite.config.ts",
+    "postbuild:legacy": "cp -r src/server/public dist/server/public",
     "test": "vitest run",
     "test:watch": "vitest --ui --coverage",
     "example": "tsx examples/example.ts",
@@ -44,13 +53,16 @@
   },
   "type": "commonjs",
   "devDependencies": {
+    "@preact/preset-vite": "^2.9.4",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.3.3",
     "@vitest/coverage-v8": "^4.0.18",
     "@vitest/ui": "^4.0.18",
+    "preact": "^10.25.4",
     "prettier": "^3.8.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
+    "vite": "^6.3.5",
     "vitest": "^4.0.18"
   },
   "dependencies": {

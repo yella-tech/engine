@@ -6,6 +6,69 @@ import { serve } from '@hono/node-server'
 import type { Engine, DevServer, DevServerOptions } from '../types.js'
 import { registerRoutes } from './routes.js'
 
+function readFileOr(filePath: string, fallback: string): string {
+  try {
+    return fs.readFileSync(filePath, 'utf-8')
+  } catch {
+    return fallback
+  }
+}
+
+const fallbackHtml = '<html><body><p>Dashboard not found. Run <code>npm run build</code> to build UI.</p></body></html>'
+
+const MIME_TYPES: Record<string, string> = {
+  '.js': 'application/javascript',
+  '.css': 'text/css',
+  '.html': 'text/html',
+}
+
+export function serveDashboard(app: Hono): void {
+  // When running from dist/, ../ui → dist/ui/ (correct).
+  // When running from source via tsx, ../ui → src/ui/ (dev files, no built assets).
+  // Detect by checking for app.js; fall back to the dist/ui/ path from the repo root.
+  const candidateUiDir = path.join(__dirname, '../ui')
+  const uiDir = fs.existsSync(path.join(candidateUiDir, 'app.js')) ? candidateUiDir : path.join(__dirname, '../../dist/ui')
+  const publicDir = path.join(__dirname, 'public')
+
+  // Try built Vite output first, fall back to legacy public dir
+  const indexHtml = readFileOr(path.join(uiDir, 'index.html'), readFileOr(path.join(publicDir, 'index.html'), fallbackHtml))
+
+  app.get('/', (c) => c.html(indexHtml))
+
+  // Serve all built UI assets from dist/ui/
+  const uiFiles = safeReadDir(uiDir)
+  for (const file of uiFiles) {
+    if (file === 'index.html') continue
+    const ext = path.extname(file)
+    const content = readFileOr(path.join(uiDir, file), '')
+    if (content) {
+      app.get('/' + file, (c) => {
+        c.header('Content-Type', MIME_TYPES[ext] || 'application/octet-stream')
+        c.header('Cache-Control', 'public, max-age=3600')
+        return c.body(content)
+      })
+    }
+  }
+
+  // Serve legacy brutalist.css for backward compatibility
+  const legacyCss = readFileOr(path.join(publicDir, 'brutalist.css'), '')
+  if (legacyCss && !uiFiles.includes('brutalist.css')) {
+    app.get('/brutalist.css', (c) => {
+      c.header('Content-Type', 'text/css')
+      c.header('Cache-Control', 'public, max-age=3600')
+      return c.body(legacyCss)
+    })
+  }
+}
+
+function safeReadDir(dir: string): string[] {
+  try {
+    return fs.readdirSync(dir)
+  } catch {
+    return []
+  }
+}
+
 export function createDevServer(engine: Engine, opts?: DevServerOptions): Promise<DevServer> {
   const host = opts?.host ?? '127.0.0.1'
   const port = opts?.port ?? 3000
@@ -14,28 +77,7 @@ export function createDevServer(engine: Engine, opts?: DevServerOptions): Promis
   app.use('*', cors())
 
   registerRoutes(app, engine)
-
-  // Serve dashboard static files
-  const publicDir = path.join(__dirname, 'public')
-  let html: string
-  try {
-    html = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf-8')
-  } catch {
-    html = '<html><body><p>Dashboard HTML not found. Run <code>npm run build</code> to include it.</p></body></html>'
-  }
-  app.get('/', (c) => c.html(html))
-
-  let css: string
-  try {
-    css = fs.readFileSync(path.join(publicDir, 'brutalist.css'), 'utf-8')
-  } catch {
-    css = ''
-  }
-  app.get('/brutalist.css', (c) => {
-    c.header('Content-Type', 'text/css')
-    c.header('Cache-Control', 'public, max-age=3600')
-    return c.body(css)
-  })
+  serveDashboard(app)
 
   return new Promise<DevServer>((resolve) => {
     const server = serve({ fetch: app.fetch, hostname: host, port }, (info) => {
