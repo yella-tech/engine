@@ -293,7 +293,12 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     if (!run.result?.triggerEvent) throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Run has no triggerEvent to resume`)
     if (!run.result?.deferred) throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Run is not deferred`)
     runStore.setResult(runId, { ...run.result, deferred: false })
-    const mergedPayload = payload !== undefined ? { ...(run.result.payload as any), ...payload } : run.result.payload
+    const mergedPayload =
+      payload !== undefined && typeof payload === 'object' && payload !== null && typeof run.result.payload === 'object' && run.result.payload !== null
+        ? { ...(run.result.payload as any), ...(payload as any) }
+        : payload !== undefined
+          ? payload
+          : run.result.payload
     const runs = bus.enqueue(run.result.triggerEvent, mergedPayload, run.id, run.correlationId, run.context)
     dispatcher.kick()
     return runs

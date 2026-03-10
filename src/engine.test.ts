@@ -609,6 +609,31 @@ function engineTests(label: string, opts: EngineOptions) {
         engine = createEngine(opts)
         expect(() => engine.resume('nonexistent')).toThrow(/not found/)
       })
+
+      it('resume with non-object payloads does not corrupt data', async () => {
+        engine = createEngine(opts)
+        let childPayload: unknown = null
+        engine.register('step1', 'start', async () => ({
+          success: true,
+          triggerEvent: 'next',
+          deferred: true,
+          payload: 'stored-string',
+        }))
+        engine.register('step2', 'next', async ({ payload }) => {
+          childPayload = payload
+          return { success: true }
+        })
+
+        engine.emit('start', {})
+        await engine.drain()
+
+        const deferred = engine.getCompleted().find((r) => r.result?.deferred)!
+        engine.resume(deferred.id, ['a', 'b'])
+        await engine.drain()
+
+        // Non-object resume payload replaces rather than merging
+        expect(childPayload).toEqual(['a', 'b'])
+      })
     })
   })
 }
