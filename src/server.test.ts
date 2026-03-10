@@ -231,6 +231,69 @@ describe('dev server', () => {
     expect(res.status).toBe(422)
   })
 
+  it('POST /runs/:id/resume resumes a deferred run', async () => {
+    engine = createEngine({ server: { port: 0 } })
+    engine.register('step1', 'start', async () => ({ success: true, triggerEvent: 'next', deferred: true }))
+    engine.register('step2', 'next', async () => ({ success: true }))
+    engine.emit('start', {})
+    await engine.drain()
+
+    const deferred = engine.getCompleted().find((r) => r.result?.deferred)!
+    const server = await engine.getServer()!
+    const res = await fetch(`http://${server.address.host}:${server.address.port}/runs/${deferred.id}/resume`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approved: true }),
+    })
+    expect(res.ok).toBe(true)
+    const data = await res.json()
+    expect(data.resumed).toBe(true)
+    expect(data.runs.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('POST /runs/:id/resume returns 400 for malformed JSON', async () => {
+    engine = createEngine({ server: { port: 0 } })
+    engine.register('step1', 'start', async () => ({ success: true, triggerEvent: 'next', deferred: true }))
+    engine.emit('start', {})
+    await engine.drain()
+
+    const deferred = engine.getCompleted().find((r) => r.result?.deferred)!
+    const server = await engine.getServer()!
+    const res = await fetch(`http://${server.address.host}:${server.address.port}/runs/${deferred.id}/resume`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{bad json',
+    })
+    expect(res.status).toBe(400)
+  })
+
+  it('POST /runs/:id/resume works without body', async () => {
+    engine = createEngine({ server: { port: 0 } })
+    engine.register('step1', 'start', async () => ({ success: true, triggerEvent: 'next', deferred: true }))
+    engine.register('step2', 'next', async () => ({ success: true }))
+    engine.emit('start', {})
+    await engine.drain()
+
+    const deferred = engine.getCompleted().find((r) => r.result?.deferred)!
+    const server = await engine.getServer()!
+    const res = await fetch(`http://${server.address.host}:${server.address.port}/runs/${deferred.id}/resume`, { method: 'POST' })
+    expect(res.ok).toBe(true)
+  })
+
+  it('GET /runs?limit=-1 clamps to minimum 1', async () => {
+    engine = createEngine({ server: { port: 0 } })
+    engine.register('proc', 'go', async () => ({ success: true }))
+    engine.emit('go', { a: 1 })
+    engine.emit('go', { a: 2 })
+    engine.emit('go', { a: 3 })
+    await engine.drain()
+
+    const server = await engine.getServer()!
+    const res = await fetch(`http://${server.address.host}:${server.address.port}/runs?limit=-1`)
+    const data = await res.json()
+    expect(data.runs).toHaveLength(1)
+  })
+
   it('exposes app for custom route extension', async () => {
     engine = createEngine({ server: { port: 0 } })
     const server = await engine.getServer()!
