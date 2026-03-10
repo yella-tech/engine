@@ -18,6 +18,7 @@ describe('createBus', () => {
       maxChainDepth: 10,
       maxPayloadBytes: 1_048_576,
       handlerTimeoutMs: 30_000,
+      emitEvent: () => {},
     })
   })
 

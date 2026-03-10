@@ -531,6 +531,23 @@ export type EngineOptions = {
    * The `context` string identifies the error site (e.g. `'fillSlots'`, `'heartbeat'`, `'onRunStart'`).
    */
   onInternalError?: (error: unknown, context: string) => void
+  /**
+   * Unified lifecycle event callback. Fires synchronously for every engine event.
+   * Must not throw — exceptions are caught and reported to {@link onInternalError}
+   * but deliberately not re-emitted as `internal:error` to prevent recursion.
+   *
+   * @example
+   * ```ts
+   * const engine = createEngine({
+   *   onEvent(event) {
+   *     if (event.type === 'run:complete') {
+   *       console.log(`${event.run.processName} completed in ${event.durationMs}ms`)
+   *     }
+   *   },
+   * })
+   * ```
+   */
+  onEvent?: (event: EngineEvent) => void
   /** Start a dev dashboard HTTP server. The server holds the Node.js event loop open until stopped. */
   server?: DevServerOptions
 }
@@ -696,6 +713,14 @@ export interface Engine {
   getRunsPaginated(state: ProcessState | null, limit: number, offset: number, opts?: { root?: boolean }): { runs: Run[]; total: number }
 
   /**
+   * Get engine metrics combining store-derived queue state and runtime counters.
+   *
+   * `queue` values come from the persisted store and survive restarts.
+   * `totals` are in-process counters accumulated since engine creation.
+   */
+  getMetrics(): EngineMetrics
+
+  /**
    * Retry an errored run. Resets it to idle state for re-execution.
    * @param runId - The errored run's ID.
    * @returns The updated run in idle state.
@@ -801,6 +826,47 @@ export type EventGraph = {
   nodes: EventGraphNode[]
   /** Directed edges connecting emitters to listeners. */
   edges: EventGraphEdge[]
+}
+
+/**
+ * Discriminated union of all engine lifecycle events emitted via {@link EngineOptions.onEvent}.
+ *
+ * - `run:start` — run claimed by dispatcher and about to execute.
+ * - `run:complete` — handler returned `{ success: true }`. `durationMs` is current-attempt execution time.
+ * - `run:error` — run reached errored state (handler threw, returned `{ success: false }`, or failed validation). `durationMs` is current-attempt execution time (0 if no handler ran).
+ * - `run:retry` — handler threw but retries remain; run returns to idle.
+ * - `run:dead` — retry budget exhausted; always followed by `run:error`.
+ * - `run:resume` — a deferred run was resumed, creating child runs.
+ * - `effect:complete` — durable effect executed successfully. `durationMs` is effect function wall-clock time.
+ * - `effect:error` — durable effect threw. `durationMs` is time until the throw.
+ * - `effect:replay` — durable effect replayed from store (no re-execution).
+ * - `lease:reclaim` — a stale lease was reclaimed (one event per run).
+ * - `internal:error` — an internal error was caught that would otherwise be swallowed.
+ */
+export type EngineEvent =
+  | { type: 'run:start'; run: Run }
+  | { type: 'run:complete'; run: Run; durationMs: number }
+  | { type: 'run:error'; run: Run; error: string; durationMs: number }
+  | { type: 'run:retry'; run: Run; error: string; attempt: number }
+  | { type: 'run:dead'; run: Run; error: string }
+  | { type: 'run:resume'; resumedRun: Run; childRuns: Run[] }
+  | { type: 'effect:complete'; runId: string; effectKey: string; durationMs: number }
+  | { type: 'effect:error'; runId: string; effectKey: string; error: string; durationMs: number }
+  | { type: 'effect:replay'; runId: string; effectKey: string }
+  | { type: 'lease:reclaim'; run: Run }
+  | { type: 'internal:error'; error: unknown; context: string }
+
+/**
+ * Engine metrics combining store-derived state and runtime counters.
+ *
+ * `queue` values reflect the current persisted state and survive restarts.
+ * `totals` are runtime counters accumulated since engine creation and reset on restart.
+ */
+export type EngineMetrics = {
+  /** Current store-derived snapshot of runs by state. */
+  queue: { idle: number; running: number; completed: number; errored: number }
+  /** Runtime counters since engine creation (reset on restart). */
+  totals: { retries: number; deadLetters: number; resumes: number; leaseReclaims: number; internalErrors: number }
 }
 
 /**

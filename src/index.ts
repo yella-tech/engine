@@ -12,6 +12,8 @@ import type {
   EffectRecord,
   EffectStore,
   Engine,
+  EngineEvent,
+  EngineMetrics,
   EngineOptions,
   Handler,
   HandlerContext,
@@ -37,6 +39,8 @@ export type {
   EffectState,
   EffectStore,
   Engine,
+  EngineEvent,
+  EngineMetrics,
   EngineOptions,
   Handler,
   HandlerContext,
@@ -126,6 +130,80 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   }
   const leaseOwner = crypto.randomUUID()
 
+  // ── Observability ──
+
+  const totals = { retries: 0, deadLetters: 0, resumes: 0, leaseReclaims: 0, internalErrors: 0 }
+
+  /** Report an internal error without going through emitEvent (breaks recursion). */
+  function reportInternalError(error: unknown, context: string): void {
+    totals.internalErrors++
+    try {
+      opts.onInternalError?.(error, context)
+    } catch {
+      /* safety net */
+    }
+  }
+
+  /** Central event emitter. Never throws. Routes to counters, legacy hooks, and onEvent. */
+  function emitEvent(event: EngineEvent): void {
+    // 1. Runtime counters
+    switch (event.type) {
+      case 'run:retry':
+        totals.retries++
+        break
+      case 'run:dead':
+        totals.deadLetters++
+        break
+      case 'run:resume':
+        totals.resumes++
+        break
+      case 'lease:reclaim':
+        totals.leaseReclaims++
+        break
+      case 'internal:error':
+        totals.internalErrors++
+        break
+    }
+
+    // 2. Legacy hooks (safe — failures go to reportInternalError, not back to emitEvent)
+    switch (event.type) {
+      case 'run:start':
+        safeCallHook(opts.onRunStart, [event.run], reportInternalError, 'onRunStart')
+        break
+      case 'run:complete':
+        safeCallHook(opts.onRunFinish, [event.run], reportInternalError, 'onRunFinish')
+        break
+      case 'run:error':
+        safeCallHook(opts.onRunError, [event.run, event.error], reportInternalError, 'onRunError')
+        safeCallHook(opts.onRunFinish, [event.run], reportInternalError, 'onRunFinish')
+        break
+      case 'run:retry':
+        safeCallHook(opts.onRetry, [event.run, event.error, event.attempt], reportInternalError, 'onRetry')
+        break
+      case 'run:dead':
+        safeCallHook(opts.onDead, [event.run, event.error], reportInternalError, 'onDead')
+        break
+      case 'internal:error':
+        try {
+          opts.onInternalError?.(event.error, event.context)
+        } catch {
+          /* safety net */
+        }
+        break
+    }
+
+    // 3. Unified onEvent — NOT called recursively for its own failures
+    if (opts.onEvent) {
+      try {
+        opts.onEvent(event)
+      } catch (err) {
+        reportInternalError(err, 'onEvent')
+      }
+    }
+  }
+
+  // ── Core wiring ──
+
   const registry = createRegistry()
   const { runStore, effectStore, close } = buildStores(opts)
   const bus = createBus(registry, runStore, {
@@ -134,14 +212,9 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     handlerTimeoutMs,
     effectStore,
     defaultRetry: opts.retry,
-    onRetry: opts.onRetry,
-    onDead: opts.onDead,
-    onRunStart: opts.onRunStart,
-    onRunFinish: opts.onRunFinish,
-    onRunError: opts.onRunError,
-    onInternalError: opts.onInternalError,
+    emitEvent,
   })
-  const dispatcher = createDispatcher(runStore, bus.executeRun, concurrency, { leaseOwner, leaseTimeoutMs, heartbeatIntervalMs }, opts.onInternalError)
+  const dispatcher = createDispatcher(runStore, bus.executeRun, concurrency, { leaseOwner, leaseTimeoutMs, heartbeatIntervalMs }, reportInternalError)
   let acceptingEvents = true
 
   // Start dev server in background if configured
@@ -164,26 +237,26 @@ export function createEngine(opts: EngineOptions = {}): Engine {
 
   // Resume any idle runs left from a previous crash (deferred so handlers can be registered first)
   queueMicrotask(() => {
-    // Reclaim runs with expired leases from crashed workers
     try {
       const reclaimed = runStore.reclaimStale()
       for (const run of reclaimed) {
+        emitEvent({ type: 'lease:reclaim', run })
         const retryPolicy = registry.getByEvent(run.eventName).find((d) => d.name === run.processName)?.retry ?? opts.retry
 
         if (retryPolicy && run.attempt > retryPolicy.maxRetries) {
-          // Retry budget exhausted, transition to errored
           runStore.transition(run.id, 'running')
           const error = 'lease expired, retry budget exhausted'
           runStore.setResult(run.id, { success: false, error, errorCode: ErrorCode.LEASE_EXPIRED })
           runStore.transition(run.id, 'errored', { error })
           const errored = runStore.get(run.id)!
-          safeCallHook(opts.onDead, [errored, error], opts.onInternalError, 'onDead')
+          emitEvent({ type: 'run:dead', run: errored, error })
+          emitEvent({ type: 'run:error', run: errored, error, durationMs: 0 })
         } else {
-          safeCallHook(opts.onRetry, [run, 'lease expired', run.attempt - 1], opts.onInternalError, 'onRetry')
+          emitEvent({ type: 'run:retry', run, error: 'lease expired', attempt: run.attempt - 1 })
         }
       }
     } catch (err) {
-      opts.onInternalError?.(err, 'reclaimStale')
+      emitEvent({ type: 'internal:error', error: err, context: 'reclaimStale' })
     }
     dispatcher.kick()
   })
@@ -299,9 +372,10 @@ export function createEngine(opts: EngineOptions = {}): Engine {
         : payload !== undefined
           ? payload
           : run.result.payload
-    const runs = bus.enqueue(run.result.triggerEvent, mergedPayload, run.id, run.correlationId, run.context)
+    const childRuns = bus.enqueue(run.result.triggerEvent, mergedPayload, run.id, run.correlationId, run.context)
+    emitEvent({ type: 'run:resume', resumedRun: run, childRuns })
     dispatcher.kick()
-    return runs
+    return childRuns
   }
 
   function getServer(): Promise<DevServer> | null {
@@ -402,6 +476,18 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     }
   }
 
+  function getMetrics(): EngineMetrics {
+    return {
+      queue: {
+        idle: countByState('idle'),
+        running: countByState('running'),
+        completed: countByState('completed'),
+        errored: countByState('errored'),
+      },
+      totals: { ...totals },
+    }
+  }
+
   function getGraph(): EventGraph {
     const processes = registry.getAll()
     const nodes: EventGraphNode[] = processes.map((p) => ({
@@ -443,6 +529,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     getGraph,
     countByState,
     getRunsPaginated,
+    getMetrics,
     retryRun,
     requeueDead,
     cancelRun,

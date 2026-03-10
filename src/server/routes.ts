@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import type { Run, ProcessState, ProcessDefinition, EffectRecord, EventGraph } from '../types.js'
+import type { Run, ProcessState, ProcessDefinition, EffectRecord, EngineMetrics, EventGraph } from '../types.js'
 import { buildTraceTree, flattenTrace } from './trace.js'
 
 export interface RoutableEngine {
@@ -18,21 +18,23 @@ export interface RoutableEngine {
   resume(runId: string, payload?: unknown): Run[]
   countByState(state: ProcessState): number
   getRunsPaginated(state: ProcessState | null, limit: number, offset: number, opts?: { root?: boolean }): { runs: Run[]; total: number }
+  getMetrics(): EngineMetrics
 }
 
 export function registerRoutes(app: Hono, engine: RoutableEngine) {
   app.get('/health', (c) => {
+    const metrics = engine.getMetrics()
     return c.json({
       status: 'ok',
       uptime: process.uptime(),
-      queue: {
-        running: engine.countByState('running'),
-        idle: engine.countByState('idle'),
-        completed: engine.countByState('completed'),
-        errored: engine.countByState('errored'),
-      },
+      queue: metrics.queue,
+      totals: metrics.totals,
       processes: engine.getProcesses().map((p) => ({ name: p.name, event: p.eventName })),
     })
+  })
+
+  app.get('/metrics', (c) => {
+    return c.json(engine.getMetrics())
   })
 
   app.get('/runs', (c) => {
