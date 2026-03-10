@@ -1,6 +1,6 @@
 {
   "name": "@yellatech/engine",
-  "version": "0.13.7",
+  "version": "0.13.8",
   "description": "Durable TypeScript runtime for agents and automations. Effects store their results, retries pick up where you left off.",
   "main": "dist/index.js",
   "exports": {
