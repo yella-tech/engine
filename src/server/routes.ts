@@ -15,6 +15,7 @@ export interface RoutableEngine {
   requeueDead(runId: string): Run
   getGraph(): EventGraph
   emit(event: string, payload: unknown, opts?: { idempotencyKey?: string }): Run[]
+  resume(runId: string, payload?: unknown): Run[]
   countByState(state: ProcessState): number
   getRunsPaginated(state: ProcessState | null, limit: number, offset: number, opts?: { root?: boolean }): { runs: Run[]; total: number }
 }
@@ -110,8 +111,30 @@ export function registerRoutes(app: Hono, engine: RoutableEngine) {
     return c.json(engine.getGraph())
   })
 
+  app.post('/runs/:id/resume', async (c) => {
+    const id = c.req.param('id')
+    let body: unknown
+    try {
+      body = await c.req.json()
+    } catch {
+      body = undefined
+    }
+    try {
+      const runs = engine.resume(id, body)
+      return c.json({ resumed: true, runs: runs.map((r) => ({ id: r.id, process: r.processName, state: r.state })) })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 422)
+    }
+  })
+
   app.post('/emit', async (c) => {
-    const body = await c.req.json<{ event?: string; payload?: unknown; idempotencyKey?: string }>()
+    let body: { event?: string; payload?: unknown; idempotencyKey?: string }
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ error: 'Invalid JSON body' }, 400)
+    }
     const { event, payload, idempotencyKey } = body
 
     if (!event || typeof event !== 'string') {

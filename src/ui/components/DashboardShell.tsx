@@ -209,6 +209,26 @@ export function DashboardShell({ config }: { config: DashboardConfig }) {
       })
     },
 
+    resumeStep: async (runId: string) => {
+      try {
+        const data = await api('/runs/' + runId + '/resume', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        })
+        addTicker(
+          <>
+            resumed <span class="t-event">{shortId(runId)}</span> → {data.runs?.length ?? 0} run(s) created
+          </>,
+        )
+        setTimeout(() => {
+          if (overlay.runId) overlayActions.refreshOverlay(overlay.runId)
+        }, 500)
+      } catch (err: any) {
+        addTicker(<>resume failed: {err.message || 'unknown error'}</>)
+      }
+    },
+
     viewInTrace: (rootId: string) => {
       overlayActions.closeOverlay()
       navigate(`/trace/${rootId}`)
