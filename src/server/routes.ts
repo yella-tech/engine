@@ -37,7 +37,7 @@ export function registerRoutes(app: Hono, engine: RoutableEngine) {
 
   app.get('/runs', (c) => {
     const state = c.req.query('state') as ProcessState | undefined
-    const limit = Math.min(parseInt(c.req.query('limit') ?? '50', 10) || 50, 200)
+    const limit = Math.max(1, Math.min(parseInt(c.req.query('limit') ?? '50', 10) || 50, 200))
     const offset = Math.max(parseInt(c.req.query('offset') ?? '0', 10) || 0, 0)
     const root = c.req.query('root') === 'true'
     const validStates: ProcessState[] = ['running', 'completed', 'errored', 'idle']
@@ -114,10 +114,13 @@ export function registerRoutes(app: Hono, engine: RoutableEngine) {
   app.post('/runs/:id/resume', async (c) => {
     const id = c.req.param('id')
     let body: unknown
-    try {
-      body = await c.req.json()
-    } catch {
-      body = undefined
+    const contentType = c.req.header('content-type') ?? ''
+    if (contentType.includes('application/json')) {
+      try {
+        body = await c.req.json()
+      } catch {
+        return c.json({ error: 'Invalid JSON body' }, 400)
+      }
     }
     try {
       const runs = engine.resume(id, body)
