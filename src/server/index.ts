@@ -73,12 +73,13 @@ export function createDevServer(engine: RoutableEngine): DevServer {
     async serve(opts?: { host?: string; port?: number }) {
       const host = opts?.host ?? '127.0.0.1'
       const port = opts?.port ?? 3000
-      return new Promise<{ host: string; port: number }>((resolve) => {
+      return new Promise<{ host: string; port: number }>((resolve, reject) => {
         httpServer = serve({ fetch: app.fetch, hostname: host, port }, (info) => {
           const addr = { host: info.address as string, port: info.port }
           Object.assign(address, addr)
           resolve(addr)
         })
+        httpServer.on('error', reject)
       })
     },
     async stop() {
