@@ -129,6 +129,19 @@ describe('dev server', () => {
     expect(res.status).toBe(400)
   })
 
+  it('POST /emit returns 400 for malformed JSON', async () => {
+    engine = createEngine({ server: { port: 0 } })
+    const server = await engine.getServer()!
+    const res = await fetch(`http://${server.address.host}:${server.address.port}/emit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{not valid json',
+    })
+    expect(res.status).toBe(400)
+    const data = await res.json()
+    expect(data.error).toContain('Invalid JSON')
+  })
+
   it('getServer() returns null without server config', () => {
     engine = createEngine()
     expect(engine.getServer()).toBeNull()

@@ -59,7 +59,7 @@ export { createEffectStore } from './effect.js'
 export { createSqliteStores } from './run-sqlite.js'
 export { registerRoutes } from './server/routes.js'
 export type { RoutableEngine } from './server/routes.js'
-export { serveDashboard, createDevServer } from './server/index.js'
+export { serveDashboard, resolveEngineUiDir, createDevServer } from './server/index.js'
 
 function buildStores(opts: EngineOptions): { runStore: RunStore; effectStore: EffectStore; close?: () => void } {
   if (opts.store === 'memory') {
@@ -148,8 +148,9 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   let serverPromise: Promise<DevServer> | null = null
   if (opts.server) {
     const serverOpts = opts.server
-    serverPromise = import('./server/index.js').then(async ({ createDevServer }) => {
+    serverPromise = import('./server/index.js').then(async ({ createDevServer, serveDashboard, resolveEngineUiDir }) => {
       const raw = createDevServer(engine)
+      serveDashboard(raw.app, resolveEngineUiDir())
       await raw.serve({ host: serverOpts.host, port: serverOpts.port })
       return {
         ...raw,
