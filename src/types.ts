@@ -481,6 +481,12 @@ export type RunStore = {
   getByIdempotencyKey(key: string): Run[]
   /** Set the handler version on a run. */
   setHandlerVersion?(runId: string, version: string): void
+  /** Count runs in a given state without loading them. */
+  countByState?(state: ProcessState): number
+  /** Retrieve a page of runs with total count, optionally filtered by state. */
+  getByStatePaginated?(state: ProcessState | null, limit: number, offset: number, opts?: { root?: boolean }): { runs: Run[]; total: number }
+  /** Check whether any runs exist in a given state without loading them. */
+  hasState?(state: ProcessState): boolean
   /** Close the underlying storage connection, if applicable. */
   close?(): void
 }
@@ -682,6 +688,12 @@ export interface Engine {
    * ```
    */
   getGraph(): EventGraph
+
+  /** Count runs in a given state without loading them. */
+  countByState(state: ProcessState): number
+
+  /** Retrieve a page of runs with total count, optionally filtered by state. */
+  getRunsPaginated(state: ProcessState | null, limit: number, offset: number, opts?: { root?: boolean }): { runs: Run[]; total: number }
 
   /**
    * Retry an errored run. Resets it to idle state for re-execution.

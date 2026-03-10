@@ -131,6 +131,12 @@ const migrations: ((db: Database.Database) => void)[] = [
       ALTER TABLE runs ADD COLUMN handler_version TEXT;
     `)
   },
+  // Migration 7 → 8: composite index for efficient state+time queries
+  (db) => {
+    db.exec(`
+      CREATE INDEX idx_runs_state_started_at ON runs(state, started_at DESC);
+    `)
+  },
 ]
 
 function applyMigrations(db: Database.Database) {
@@ -172,6 +178,15 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     reclaimStaleSelect: db.prepare("SELECT * FROM runs WHERE state = 'running' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?"),
     reclaimStaleUpdate: db.prepare("UPDATE runs SET state = 'idle', attempt = attempt + 1, timeline = ?, lease_owner = NULL, lease_expires_at = NULL, heartbeat_at = NULL WHERE id = ?"),
     setHandlerVersion: db.prepare('UPDATE runs SET handler_version = ? WHERE id = ?'),
+    countByState: db.prepare('SELECT COUNT(*) as cnt FROM runs WHERE state = ?'),
+    hasState: db.prepare('SELECT 1 FROM runs WHERE state = ? LIMIT 1'),
+    paginatedByState: db.prepare('SELECT * FROM runs WHERE state = ? ORDER BY started_at DESC LIMIT ? OFFSET ?'),
+    paginatedAll: db.prepare('SELECT * FROM runs ORDER BY started_at DESC LIMIT ? OFFSET ?'),
+    countAll: db.prepare('SELECT COUNT(*) as cnt FROM runs'),
+    paginatedByStateRoot: db.prepare("SELECT * FROM runs WHERE state = ? AND parent_run_id IS NULL ORDER BY started_at DESC LIMIT ? OFFSET ?"),
+    paginatedAllRoot: db.prepare("SELECT * FROM runs WHERE parent_run_id IS NULL ORDER BY started_at DESC LIMIT ? OFFSET ?"),
+    countByStateRoot: db.prepare("SELECT COUNT(*) as cnt FROM runs WHERE state = ? AND parent_run_id IS NULL"),
+    countAllRoot: db.prepare("SELECT COUNT(*) as cnt FROM runs WHERE parent_run_id IS NULL"),
   }
 
   function create(
@@ -393,6 +408,36 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     stmts.setHandlerVersion.run(version, runId)
   }
 
+  function countByState(state: ProcessState): number {
+    return (stmts.countByState.get(state) as { cnt: number }).cnt
+  }
+
+  function hasState(state: ProcessState): boolean {
+    return stmts.hasState.get(state) !== undefined
+  }
+
+  function getByStatePaginated(state: ProcessState | null, limit: number, offset: number, opts?: { root?: boolean }): { runs: Run[]; total: number } {
+    const root = opts?.root ?? false
+    let rows: RunRow[]
+    let total: number
+
+    if (state && root) {
+      rows = stmts.paginatedByStateRoot.all(state, limit, offset) as RunRow[]
+      total = (stmts.countByStateRoot.get(state) as { cnt: number }).cnt
+    } else if (state) {
+      rows = stmts.paginatedByState.all(state, limit, offset) as RunRow[]
+      total = (stmts.countByState.get(state) as { cnt: number }).cnt
+    } else if (root) {
+      rows = stmts.paginatedAllRoot.all(limit, offset) as RunRow[]
+      total = (stmts.countAllRoot.get() as { cnt: number }).cnt
+    } else {
+      rows = stmts.paginatedAll.all(limit, offset) as RunRow[]
+      total = (stmts.countAll.get() as { cnt: number }).cnt
+    }
+
+    return { runs: rows.map(rowToRun), total }
+  }
+
   function close() {
     db.close()
   }
@@ -449,6 +494,9 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     heartbeat,
     reclaimStale,
     setHandlerVersion,
+    countByState,
+    hasState,
+    getByStatePaginated,
     close,
   }
 }

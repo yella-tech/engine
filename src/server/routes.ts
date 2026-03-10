@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import type { Run, ProcessDefinition, EffectRecord, EventGraph } from '../types.js'
+import type { Run, ProcessState, ProcessDefinition, EffectRecord, EventGraph } from '../types.js'
 import { buildTraceTree, flattenTrace } from './trace.js'
 
 export interface RoutableEngine {
@@ -15,62 +15,34 @@ export interface RoutableEngine {
   requeueDead(runId: string): Run
   getGraph(): EventGraph
   emit(event: string, payload: unknown, opts?: { idempotencyKey?: string }): Run[]
+  countByState(state: ProcessState): number
+  getRunsPaginated(state: ProcessState | null, limit: number, offset: number, opts?: { root?: boolean }): { runs: Run[]; total: number }
 }
 
 export function registerRoutes(app: Hono, engine: RoutableEngine) {
   app.get('/health', (c) => {
-    const running = engine.getRunning()
-    const idle = engine.getIdle()
-    const errored = engine.getErrored()
-    const completed = engine.getCompleted()
-    const processes = engine.getProcesses()
-
     return c.json({
       status: 'ok',
       uptime: process.uptime(),
       queue: {
-        running: running.length,
-        idle: idle.length,
-        completed: completed.length,
-        errored: errored.length,
+        running: engine.countByState('running'),
+        idle: engine.countByState('idle'),
+        completed: engine.countByState('completed'),
+        errored: engine.countByState('errored'),
       },
-      processes: processes.map((p) => ({
-        name: p.name,
-        event: p.eventName,
-      })),
+      processes: engine.getProcesses().map((p) => ({ name: p.name, event: p.eventName })),
     })
   })
 
   app.get('/runs', (c) => {
-    const state = c.req.query('state')
+    const state = c.req.query('state') as ProcessState | undefined
     const limit = Math.min(parseInt(c.req.query('limit') ?? '50', 10) || 50, 200)
     const offset = Math.max(parseInt(c.req.query('offset') ?? '0', 10) || 0, 0)
-
-    let runs
-    switch (state) {
-      case 'running':
-        runs = engine.getRunning()
-        break
-      case 'completed':
-        runs = engine.getCompleted()
-        break
-      case 'errored':
-        runs = engine.getErrored()
-        break
-      case 'idle':
-        runs = engine.getIdle()
-        break
-      default:
-        runs = [...engine.getRunning(), ...engine.getIdle(), ...engine.getCompleted(), ...engine.getErrored()]
-    }
-
-    if (c.req.query('root') === 'true') {
-      runs = runs.filter((r) => r.parentRunId === null)
-    }
-
-    runs.sort((a, b) => b.startedAt - a.startedAt)
-
-    return c.json({ runs: runs.slice(offset, offset + limit), total: runs.length, offset })
+    const root = c.req.query('root') === 'true'
+    const validStates: ProcessState[] = ['running', 'completed', 'errored', 'idle']
+    const stateParam = state && validStates.includes(state) ? state : null
+    const result = engine.getRunsPaginated(stateParam, limit, offset, { root })
+    return c.json({ runs: result.runs, total: result.total, offset })
   })
 
   app.get('/runs/:id', (c) => {

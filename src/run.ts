@@ -235,6 +235,32 @@ export function createRunStore(): RunStore {
     run.handlerVersion = version
   }
 
+  function countByState(state: ProcessState): number {
+    let count = 0
+    for (const run of runs.values()) {
+      if (run.state === state) count++
+    }
+    return count
+  }
+
+  function hasState(state: ProcessState): boolean {
+    for (const run of runs.values()) {
+      if (run.state === state) return true
+    }
+    return false
+  }
+
+  function getByStatePaginated(state: ProcessState | null, limit: number, offset: number, opts?: { root?: boolean }): { runs: Run[]; total: number } {
+    let filtered: Run[] = []
+    for (const run of runs.values()) {
+      if (state && run.state !== state) continue
+      if (opts?.root && run.parentRunId !== null) continue
+      filtered.push(run)
+    }
+    filtered.sort((a, b) => b.startedAt - a.startedAt)
+    return { runs: filtered.slice(offset, offset + limit).map(cloneRun), total: filtered.length }
+  }
+
   return {
     create,
     transition,
@@ -254,5 +280,8 @@ export function createRunStore(): RunStore {
     heartbeat,
     reclaimStale,
     setHandlerVersion,
+    countByState,
+    hasState,
+    getByStatePaginated,
   }
 }

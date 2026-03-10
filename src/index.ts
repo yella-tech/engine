@@ -19,6 +19,7 @@ import type {
   ProcessContext,
   ProcessDefinition,
   ProcessDefinitionConfig,
+  ProcessState,
   RetryPolicy,
   Run,
   RunStore,
@@ -241,6 +242,19 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     return effectStore.getEffects(runId)
   }
 
+  function countByState(state: ProcessState): number {
+    if (runStore.countByState) return runStore.countByState(state)
+    return runStore.getByState(state).length
+  }
+
+  function getRunsPaginated(state: ProcessState | null, limit: number, offset: number, opts?: { root?: boolean }): { runs: Run[]; total: number } {
+    if (runStore.getByStatePaginated) return runStore.getByStatePaginated(state, limit, offset, opts)
+    let runs = state ? runStore.getByState(state) : runStore.getAll()
+    if (opts?.root) runs = runs.filter((r) => r.parentRunId === null)
+    runs.sort((a, b) => b.startedAt - a.startedAt)
+    return { runs: runs.slice(offset, offset + limit), total: runs.length }
+  }
+
   function retryRun(runId: string): Run {
     const run = runStore.get(runId)
     if (!run) throw new EngineError(ErrorCode.RUN_NOT_FOUND, `Run not found: ${runId}`)
@@ -307,9 +321,8 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   }
 
   async function drain(timeoutMs = 30_000): Promise<void> {
-    const idle = runStore.getByState('idle')
-    const running = runStore.getByState('running')
-    if (idle.length === 0 && running.length === 0) return
+    const hasWork = runStore.hasState ? runStore.hasState('idle') || runStore.hasState('running') : runStore.getByState('idle').length > 0 || runStore.getByState('running').length > 0
+    if (!hasWork) return
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -422,6 +435,8 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     getProcesses,
     getEffects,
     getGraph,
+    countByState,
+    getRunsPaginated,
     retryRun,
     requeueDead,
     cancelRun,

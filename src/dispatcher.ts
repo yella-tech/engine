@@ -97,7 +97,8 @@ export function createDispatcher(
             return
           }
           try {
-            if (active === 0 && runStore.getByState('idle').length === 0) {
+            const noIdle = runStore.hasState ? !runStore.hasState('idle') : runStore.getByState('idle').length === 0
+            if (active === 0 && noIdle) {
               const fns = drainFns
               drainFns = []
               notifyDrain(fns)
