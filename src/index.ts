@@ -5,8 +5,9 @@ import { createEffectStore } from './effect.js'
 import { createRegistry } from './registry.js'
 import { createRunStore } from './run.js'
 import { createSqliteStores } from './run-sqlite.js'
+import { getRunStatus } from './status.js'
 import { EngineError, ErrorCode } from './types.js'
-import { safeCallHook } from './util.js'
+import { parseDurationMs, safeCallHook } from './util.js'
 import type {
   DevServer,
   EffectRecord,
@@ -22,6 +23,7 @@ import type {
   ProcessDefinition,
   ProcessDefinitionConfig,
   ProcessState,
+  RunStatus,
   RetryPolicy,
   Run,
   RunStore,
@@ -49,6 +51,7 @@ export type {
   ProcessDefinition,
   ProcessDefinitionConfig,
   ProcessState,
+  RunStatus,
   RetryPolicy,
   Run,
   RunStore,
@@ -61,6 +64,7 @@ export type {
 export { EngineError, ErrorCode, VALID_TRANSITIONS } from './types.js'
 export { createEffectStore } from './effect.js'
 export { createSqliteStores } from './run-sqlite.js'
+export { getRunStatus, isDeadLetterRun, isDeferredRun, withRunStatus, withRunStatuses } from './status.js'
 export { registerRoutes } from './server/routes.js'
 export type { RoutableEngine } from './server/routes.js'
 export { serveDashboard, resolveEngineUiDir, createDevServer } from './server/index.js'
@@ -125,8 +129,17 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   const handlerTimeoutMs = opts.handlerTimeoutMs ?? 30_000
   const leaseTimeoutMs = opts.leaseTimeoutMs ?? 30_000
   const heartbeatIntervalMs = opts.heartbeatIntervalMs ?? Math.floor(leaseTimeoutMs / 3)
+  let retentionMs: number | null = null
   if (heartbeatIntervalMs >= leaseTimeoutMs) {
     throw new EngineError(ErrorCode.INVALID_CONFIG, `heartbeatIntervalMs (${heartbeatIntervalMs}) must be less than leaseTimeoutMs (${leaseTimeoutMs})`)
+  }
+  if (opts.retention !== undefined) {
+    try {
+      retentionMs = parseDurationMs(opts.retention, 'retention')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      throw new EngineError(ErrorCode.INVALID_CONFIG, message)
+    }
   }
   const leaseOwner = crypto.randomUUID()
 
@@ -134,9 +147,8 @@ export function createEngine(opts: EngineOptions = {}): Engine {
 
   const totals = { retries: 0, deadLetters: 0, resumes: 0, leaseReclaims: 0, internalErrors: 0 }
 
-  /** Report an internal error without going through emitEvent (breaks recursion). */
-  function reportInternalError(error: unknown, context: string): void {
-    totals.internalErrors++
+  /** Call onInternalError safely without re-emitting events. */
+  function notifyInternalError(error: unknown, context: string): void {
     try {
       opts.onInternalError?.(error, context)
     } catch {
@@ -144,8 +156,27 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     }
   }
 
+  /** Report an internal error to metrics, onInternalError, and onEvent without recursing. */
+  function reportInternalError(error: unknown, context: string): void {
+    totals.internalErrors++
+    notifyInternalError(error, context)
+    if (opts.onEvent) {
+      try {
+        opts.onEvent({ type: 'internal:error', error, context })
+      } catch (err) {
+        totals.internalErrors++
+        notifyInternalError(err, 'onEvent')
+      }
+    }
+  }
+
   /** Central event emitter. Never throws. Routes to counters, legacy hooks, and onEvent. */
   function emitEvent(event: EngineEvent): void {
+    if (event.type === 'internal:error') {
+      reportInternalError(event.error, event.context)
+      return
+    }
+
     // 1. Runtime counters
     switch (event.type) {
       case 'run:retry':
@@ -160,12 +191,9 @@ export function createEngine(opts: EngineOptions = {}): Engine {
       case 'lease:reclaim':
         totals.leaseReclaims++
         break
-      case 'internal:error':
-        totals.internalErrors++
-        break
     }
 
-    // 2. Legacy hooks (safe — failures go to reportInternalError, not back to emitEvent)
+    // 2. Legacy hooks (safe, failures go to reportInternalError, not back to emitEvent)
     switch (event.type) {
       case 'run:start':
         safeCallHook(opts.onRunStart, [event.run], reportInternalError, 'onRunStart')
@@ -183,21 +211,15 @@ export function createEngine(opts: EngineOptions = {}): Engine {
       case 'run:dead':
         safeCallHook(opts.onDead, [event.run, event.error], reportInternalError, 'onDead')
         break
-      case 'internal:error':
-        try {
-          opts.onInternalError?.(event.error, event.context)
-        } catch {
-          /* safety net */
-        }
-        break
     }
 
-    // 3. Unified onEvent — NOT called recursively for its own failures
+    // 3. Unified onEvent, NOT called recursively for its own failures
     if (opts.onEvent) {
       try {
         opts.onEvent(event)
       } catch (err) {
-        reportInternalError(err, 'onEvent')
+        totals.internalErrors++
+        notifyInternalError(err, 'onEvent')
       }
     }
   }
@@ -216,13 +238,42 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   })
   const dispatcher = createDispatcher(runStore, bus.executeRun, concurrency, { leaseOwner, leaseTimeoutMs, heartbeatIntervalMs }, reportInternalError)
   let acceptingEvents = true
+  let retentionTimer: ReturnType<typeof setInterval> | null = null
+
+  function pruneExpiredRuns(): string[] {
+    if (retentionMs === null || !runStore.pruneCompletedBefore) return []
+    const prunedRunIds = runStore.pruneCompletedBefore(Date.now() - retentionMs)
+    if (prunedRunIds.length > 0) {
+      effectStore.deleteEffectsForRuns(prunedRunIds)
+    }
+    return prunedRunIds
+  }
+
+  if (retentionMs !== null) {
+    const sweepIntervalMs = Math.min(Math.max(Math.floor(retentionMs / 2), 10), 60_000)
+    queueMicrotask(() => {
+      try {
+        pruneExpiredRuns()
+      } catch (err) {
+        reportInternalError(err, 'retention')
+      }
+    })
+    retentionTimer = setInterval(() => {
+      try {
+        pruneExpiredRuns()
+      } catch (err) {
+        reportInternalError(err, 'retention')
+      }
+    }, sweepIntervalMs)
+    retentionTimer.unref?.()
+  }
 
   // Start dev server in background if configured
   let serverPromise: Promise<DevServer> | null = null
   if (opts.server) {
     const serverOpts = opts.server
     serverPromise = import('./server/index.js').then(async ({ createDevServer, serveDashboard, resolveEngineUiDir }) => {
-      const raw = createDevServer(engine)
+      const raw = createDevServer(engine, { dashboardFallback: false })
       serveDashboard(raw.app, resolveEngineUiDir())
       await raw.serve({ host: serverOpts.host, port: serverOpts.port })
       return {
@@ -247,7 +298,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
           runStore.transition(run.id, 'running')
           const error = 'lease expired, retry budget exhausted'
           runStore.setResult(run.id, { success: false, error, errorCode: ErrorCode.LEASE_EXPIRED })
-          runStore.transition(run.id, 'errored', { error })
+          runStore.transition(run.id, 'errored', { error, event: 'dead-letter' })
           const errored = runStore.get(run.id)!
           emitEvent({ type: 'run:dead', run: errored, error })
           emitEvent({ type: 'run:error', run: errored, error, durationMs: 0 })
@@ -342,7 +393,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   function requeueDead(runId: string): Run {
     const run = runStore.get(runId)
     if (!run) throw new EngineError(ErrorCode.RUN_NOT_FOUND, `Run not found: ${runId}`)
-    if (run.state !== 'errored') throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Cannot requeue run in state: ${run.state}`)
+    if (getRunStatus(run) !== 'dead-letter') throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Cannot requeue run in status: ${getRunStatus(run)}`)
     runStore.resetAttempt(runId)
     const updated = runStore.transition(runId, 'idle', { error: 'requeued from dead letter' })
     dispatcher.kick()
@@ -373,7 +424,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
           ? payload
           : run.result.payload
     const childRuns = bus.enqueue(run.result.triggerEvent, mergedPayload, run.id, run.correlationId, run.context)
-    emitEvent({ type: 'run:resume', resumedRun: run, childRuns })
+    emitEvent({ type: 'run:resume', resumedRun: runStore.get(runId)!, childRuns })
     dispatcher.kick()
     return childRuns
   }
@@ -385,6 +436,10 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   async function stop(stopOpts?: { graceful?: boolean; timeoutMs?: number }): Promise<void> {
     acceptingEvents = false
     dispatcher.stop()
+    if (retentionTimer) {
+      clearInterval(retentionTimer)
+      retentionTimer = null
+    }
     if (serverPromise) {
       const server = await serverPromise
       await server.stop()

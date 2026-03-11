@@ -43,6 +43,70 @@ function routeTests(label: string, opts: EngineOptions) {
       expect(data.runs[0].state).toBe('completed')
     })
 
+    it('GET /runs exposes raw state and derived status', async () => {
+      setup()
+      engine.register('approve', 'start', async () => ({ success: true, triggerEvent: 'approved', deferred: true }))
+      engine.emit('start', {})
+      await engine.drain()
+
+      const res = await app.request('/runs')
+      const data = await res.json()
+      expect(data.runs).toHaveLength(1)
+      expect(data.runs[0].state).toBe('completed')
+      expect(data.runs[0].status).toBe('deferred')
+    })
+
+    it('GET /runs?status filters deferred separately from completed', async () => {
+      setup()
+      engine.register('approve', 'approval:start', async () => ({ success: true, triggerEvent: 'approval:done', deferred: true }))
+      engine.register('finish', 'finish', async () => ({ success: true }))
+      engine.emit('approval:start', {})
+      engine.emit('finish', {})
+      await engine.drain()
+
+      const deferredRes = await app.request('/runs?status=deferred')
+      const deferredData = await deferredRes.json()
+      expect(deferredData.total).toBe(1)
+      expect(deferredData.runs).toHaveLength(1)
+      expect(deferredData.runs[0].state).toBe('completed')
+      expect(deferredData.runs[0].status).toBe('deferred')
+
+      const completedRes = await app.request('/runs?status=completed')
+      const completedData = await completedRes.json()
+      expect(completedData.total).toBe(1)
+      expect(completedData.runs).toHaveLength(1)
+      expect(completedData.runs[0].status).toBe('completed')
+    })
+
+    it('GET /runs?status filters dead-letter separately from errored', async () => {
+      setup()
+      engine.register(
+        'dead',
+        'dead',
+        async () => {
+          throw new Error('fatal')
+        },
+        { retry: { maxRetries: 0, delay: 0 } },
+      )
+      engine.register('error', 'error', async () => ({ success: false, error: 'plain error' }))
+      engine.emit('dead', {})
+      engine.emit('error', {})
+      await engine.drain()
+
+      const deadRes = await app.request('/runs?status=dead-letter')
+      const deadData = await deadRes.json()
+      expect(deadData.total).toBe(1)
+      expect(deadData.runs).toHaveLength(1)
+      expect(deadData.runs[0].state).toBe('errored')
+      expect(deadData.runs[0].status).toBe('dead-letter')
+
+      const erroredRes = await app.request('/runs?status=errored')
+      const erroredData = await erroredRes.json()
+      expect(erroredData.total).toBe(1)
+      expect(erroredData.runs).toHaveLength(1)
+      expect(erroredData.runs[0].status).toBe('errored')
+    })
+
     it('GET /runs returns paginated results', async () => {
       setup()
       engine.register('proc', 'go', async () => ({ success: true }))
@@ -108,6 +172,26 @@ function routeTests(label: string, opts: EngineOptions) {
       const data = await res.json()
       expect(data.id).toBe(runs[0].id)
       expect(data.processName).toBe('proc')
+      expect(data.status).toBe('completed')
+    })
+
+    it('GET /runs/:id exposes dead-letter status for exhausted retries', async () => {
+      setup()
+      engine.register(
+        'proc',
+        'go',
+        async () => {
+          throw new Error('fatal')
+        },
+        { retry: { maxRetries: 0, delay: 0 } },
+      )
+      const [run] = engine.emit('go', { x: 1 })
+      await engine.drain()
+
+      const res = await app.request(`/runs/${run.id}`)
+      const data = await res.json()
+      expect(data.state).toBe('errored')
+      expect(data.status).toBe('dead-letter')
     })
 
     it('GET /runs/:id returns 404 for unknown id', async () => {
@@ -127,12 +211,12 @@ function routeTests(label: string, opts: EngineOptions) {
       const res = await app.request(`/runs/${root.id}/chain`)
       const data = await res.json()
       expect(data.runs.length).toBeGreaterThanOrEqual(2)
+      expect(data.runs.every((run: any) => typeof run.status === 'string')).toBe(true)
     })
 
     it('GET /runs/:id/trace returns trace spans', async () => {
       setup()
-      engine.register('step1', 'start', async () => ({ success: true, triggerEvent: 'middle' }))
-      engine.register('step2', 'middle', async () => ({ success: true }))
+      engine.register('step1', 'start', async () => ({ success: true, triggerEvent: 'middle', deferred: true }))
       engine.emit('start', {})
       await engine.drain()
 
@@ -140,8 +224,35 @@ function routeTests(label: string, opts: EngineOptions) {
       const res = await app.request(`/runs/${root.id}/trace`)
       const data = await res.json()
       expect(data.correlationId).toBeDefined()
-      expect(data.spans.length).toBeGreaterThanOrEqual(2)
+      expect(data.spans.length).toBeGreaterThanOrEqual(1)
       expect(data.durationMs).toBeGreaterThanOrEqual(0)
+      expect(data.spans[0].state).toBe('completed')
+      expect(data.spans[0].status).toBe('deferred')
+    })
+
+    it('GET /runs/:id/trace includes deferred resume gaps', async () => {
+      setup()
+      engine.register('step1', 'start', async () => ({ success: true, triggerEvent: 'middle', deferred: true }))
+      engine.register('step2', 'middle', async () => ({ success: true }))
+      engine.emit('start', {})
+      await engine.drain()
+
+      const root = engine.getCompleted().find((r) => r.parentRunId === null)!
+      await new Promise((resolve) => setTimeout(resolve, 75))
+      const resumed = engine.resume(root.id)
+      await engine.drain()
+
+      const res = await app.request(`/runs/${root.id}/trace`)
+      const data = await res.json()
+      expect(data.spans).toHaveLength(2)
+      expect(data.gaps).toHaveLength(1)
+      expect(data.gaps[0].type).toBe('deferred')
+      expect(data.gaps[0].parentRunId).toBe(root.id)
+      expect(data.gaps[0].childRunIds).toContain(resumed[0].id)
+      expect(data.gaps[0].durationMs).toBeGreaterThanOrEqual(50)
+      expect(data.pausedDurationMs).toBe(data.gaps[0].durationMs)
+      expect(data.executionDurationMs).toBeGreaterThanOrEqual(0)
+      expect(data.durationMs).toBeGreaterThan(data.executionDurationMs)
     })
 
     it('GET /runs/:id/effects returns effect records', async () => {
@@ -221,7 +332,14 @@ function routeTests(label: string, opts: EngineOptions) {
 
     it('POST /runs/:id/requeue returns idle state', async () => {
       setup()
-      engine.register('fail-proc', 'go', async () => ({ success: false, error: 'boom' }))
+      engine.register(
+        'fail-proc',
+        'go',
+        async () => {
+          throw new Error('boom')
+        },
+        { retry: { maxRetries: 0, delay: 0 } },
+      )
       engine.emit('go', {})
       await engine.drain()
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { createEngine, EngineError, ErrorCode } from './index.js'
+import { getRunStatus } from './status.js'
 import type { EngineOptions } from './types.js'
 
 // --- Retry / DLQ tests ---
@@ -45,6 +46,7 @@ function retryTests(label: string, opts: EngineOptions) {
       const run = errored[0]
       expect(run.attempt).toBe(2)
       expect(run.result!.error).toBe('always-fails')
+      expect(getRunStatus(run)).toBe('dead-letter')
     })
 
     it('retry with delay sets retryAfter', async () => {

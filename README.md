@@ -20,7 +20,7 @@ npm install @yellatech/engine
 ```typescript
 import { createEngine } from '@yellatech/engine'
 
-const engine = createEngine({ store: { path: './agent.db' } })
+const engine = createEngine({ store: { type: 'sqlite', path: './agent.db' } })
 
 engine.process({
   name: 'research',
@@ -46,7 +46,7 @@ await engine.stop()
 
 ## Why
 
-### Side effects run once
+### Completed effects do not re-run
 
 `ctx.effect()` stores the result of any external call. If your handler retries after a crash, effects that already completed return their stored result. The function doesn't run again.
 
@@ -55,7 +55,7 @@ const result = await ctx.effect({
   key: 'llm-summarize',
   run: () => llm.chat('Summarize this document'),
 })
-// crashed after the call? returns the stored result.
+// if it already completed, retries return the stored result.
 // $0.15 well spent, not $0.30.
 ```
 
@@ -65,7 +65,7 @@ No replay engine, no determinism constraints, no framework DSL. Your handler re-
 
 ### Crash recovery
 
-Lease-based heartbeating detects dead workers. When the process restarts, expired leases are reclaimed and runs resume with their stored effect results intact.
+Lease-based heartbeating detects abandoned runs. When the process restarts, expired leases are reclaimed and runs resume with their stored effect results intact.
 
 ### Event chains
 
@@ -105,10 +105,12 @@ Every run in a chain shares a correlation ID. A configurable max chain depth pre
 - **Configurable retries** with fixed or computed backoff delays
 - **Lease-based crash recovery** with heartbeating
 - **Event chaining** with correlation IDs and context propagation
+- **Deferred and dead-letter statuses** for operator-facing pause/failure visibility
+- **Lifecycle events and metrics** via `onEvent()` and `engine.getMetrics()`
 - **Schema validation** via Zod (or any object with a `.parse()` method)
 - **Idempotent event admission** with composite unique keys
 - **Concurrency control** with configurable parallelism
-- **Built-in dev dashboard** for inspecting runs, traces, and timelines
+- **Built-in dev dashboard** for inspecting runs, traces, timelines, and graph views
 - **SQLite persistence** via better-sqlite3 (WAL mode, prepared statements, migrations)
 - **In-memory mode** for tests and scripts that don't need durability
 
@@ -118,7 +120,7 @@ By default the engine runs in-memory. For persistence across restarts:
 
 ```typescript
 // Option 1: pass a path
-const engine = createEngine({ store: { path: './app.db' } })
+const engine = createEngine({ store: { type: 'sqlite', path: './app.db' } })
 
 // Option 2: environment variable
 // STATE_DB_PATH=./app.db node app.js
@@ -127,9 +129,27 @@ const engine = createEngine()
 
 SQLite provides crash recovery, cross-restart idempotency, and the effect ledger. In-memory mode is useful for tests and short-lived scripts.
 
+## Observability
+
+You can subscribe to lifecycle events and inspect the current queue snapshot without bringing in another dependency:
+
+```typescript
+const engine = createEngine({
+  onEvent(event) {
+    if (event.type === 'run:dead') {
+      console.error(`[dead-letter] ${event.run.processName}: ${event.error}`)
+    }
+  },
+})
+
+console.log(engine.getMetrics())
+```
+
+API and dashboard responses expose both the raw persisted `state` and a derived operator-facing `status`, so `completed` vs `deferred` and `errored` vs `dead-letter` stay distinguishable without changing the core state machine.
+
 ## Dev Dashboard
 
-One line enables a built-in dashboard with Gantt traces of every run.
+One line enables a built-in dashboard with traces, graph views, and operator-focused run status.
 
 ```typescript
 const engine = createEngine({ server: { port: 3400 } })
@@ -137,11 +157,24 @@ const engine = createEngine({ server: { port: 3400 } })
 
 The dashboard is a Preact app served from built static assets. It includes:
 
-- **Overview** — live stats and recent runs
-- **Processes** — registered process table with event graph visualization
-- **Runs** — filterable run browser with root-only toggle
-- **Trace** — Gantt timeline of execution chains with gap-collapsing
-- **Emit** — manual event emission for testing
+- **Overview**, live stats and recent runs
+- **Processes**, registered process table with event graph visualization
+- **Runs**, filterable run browser with root-only toggle
+- **Trace**, Gantt timeline of execution chains with gap-collapsing
+- **Emit**, manual event emission for testing
+
+## Examples
+
+```bash
+# General pipeline + dashboard
+npm run example
+
+# Deferred review + dead-letter + requeue
+npm run example:approval
+
+# Throughput sweep across concurrency levels
+npm run load-test
+```
 
 ### UI Component Library
 
@@ -150,8 +183,8 @@ The dashboard components are exported as a library via `@yellatech/engine/ui` fo
 ### Developing the Dashboard
 
 ```bash
-# Terminal 1: run the engine with a server
-npm run dev
+# Terminal 1: run an engine example with a server
+npm run example
 
 # Terminal 2: Vite dev server with HMR (proxies API calls to :3000)
 npm run dev:ui

@@ -62,6 +62,14 @@ export class EngineError extends Error {
 export type ProcessState = 'idle' | 'running' | 'completed' | 'errored'
 
 /**
+ * Operator-facing run classification exposed by the API/UI layer.
+ *
+ * This intentionally extends the raw engine lifecycle with derived statuses
+ * like `deferred` and `dead-letter` while preserving the persisted core state machine.
+ */
+export type RunStatus = ProcessState | 'deferred' | 'dead-letter'
+
+/**
  * Maps each {@link ProcessState} to the states it may legally transition to.
  * Used internally by the run store to enforce the state machine.
  */
@@ -76,7 +84,7 @@ export const VALID_TRANSITIONS: Record<ProcessState, ProcessState[]> = {
  * Configuration for automatic retries on handler failure.
  */
 export type RetryPolicy = {
-  /** Maximum number of retry attempts before the run is sent to the dead-letter state. Must be >= 0. */
+  /** Maximum number of retry attempts before the run is marked with dead-letter status. Must be >= 0. */
   maxRetries: number
   /**
    * Delay in milliseconds before the next retry, or a function that receives the
@@ -396,6 +404,8 @@ export type EffectStore = {
   markCompleted(runId: string, effectKey: string, output: unknown): void
   /** Mark an effect as failed and persist the error message. */
   markFailed(runId: string, effectKey: string, error: string): void
+  /** Delete all effect records for the given run IDs. Returns the number of records removed. */
+  deleteEffectsForRuns(runIds: string[]): number
 }
 
 /**
@@ -487,6 +497,8 @@ export type RunStore = {
   getByStatePaginated?(state: ProcessState | null, limit: number, offset: number, opts?: { root?: boolean }): { runs: Run[]; total: number }
   /** Check whether any runs exist in a given state without loading them. */
   hasState?(state: ProcessState): boolean
+  /** Delete completed non-deferred runs older than the cutoff. Returns the deleted run IDs. */
+  pruneCompletedBefore?(cutoffMs: number): string[]
   /** Close the underlying storage connection, if applicable. */
   close?(): void
 }
@@ -507,9 +519,15 @@ export type EngineOptions = {
   handlerTimeoutMs?: number
   /** Default retry policy applied to all processes without an explicit policy. */
   retry?: RetryPolicy
+  /**
+   * Automatically prune completed non-deferred runs older than this duration.
+   * Accepts either milliseconds or a compact string like `'30d'`, `'12h'`, `'15m'`, or `'500ms'`.
+   * Effect records for deleted runs are pruned alongside them.
+   */
+  retention?: number | string
   /** Called when a run is retried after failure. */
   onRetry?: (run: Run, error: string, attempt: number) => void
-  /** Called when a run exhausts its retry budget and enters the dead-letter state. */
+  /** Called when a run exhausts its retry budget and is marked with dead-letter status. */
   onDead?: (run: Run, error: string) => void
   /** Called when a run transitions to `running`. */
   onRunStart?: (run: Run) => void
@@ -533,7 +551,7 @@ export type EngineOptions = {
   onInternalError?: (error: unknown, context: string) => void
   /**
    * Unified lifecycle event callback. Fires synchronously for every engine event.
-   * Must not throw — exceptions are caught and reported to {@link onInternalError}
+   * Must not throw, exceptions are caught and reported to {@link onInternalError}
    * but deliberately not re-emitted as `internal:error` to prevent recursion.
    *
    * @example
@@ -607,7 +625,7 @@ export interface Engine {
    * @param eventName - The event name to emit.
    * @param payload - The event payload.
    * @param opts - Optional idempotency key.
-   * @returns The created runs (empty if engine is stopped or no handlers match).
+   * @returns The newly created runs (empty if engine is stopped, no handlers match, or the idempotency key was already used).
    */
   emit(eventName: string, payload: unknown, opts?: { idempotencyKey?: string }): Run[]
 
@@ -630,7 +648,7 @@ export interface Engine {
    * @param eventName - The event name to emit.
    * @param payload - The event payload.
    * @param opts - Optional idempotency key and timeout.
-   * @returns The completed runs with final state.
+   * @returns The newly created runs with final state, or an empty array if the emit was skipped.
    */
   emitAndWait(eventName: string, payload: unknown, opts?: { idempotencyKey?: string; timeoutMs?: number }): Promise<Run[]>
 
@@ -666,9 +684,10 @@ export interface Engine {
   getRun(id: string): Run | null
 
   /**
-   * Retrieve the full causal chain of runs linked by parent/child relationships.
-   * @param runId - Any run ID in the chain.
-   * @returns All runs in the chain, ordered by creation.
+   * Retrieve a run and all of its descendants linked by parent/child relationships.
+   * Pass a root run ID to obtain the full causal chain from the top.
+   * @param runId - The root of the sub-chain to return.
+   * @returns The run and all descendant runs, ordered by traversal.
    */
   getChain(runId: string): Run[]
 
@@ -733,10 +752,10 @@ export interface Engine {
    * Requeue a dead-letter run by resetting its attempt counter and state.
    * Unlike {@link retryRun}, this resets the attempt count so the full
    * retry budget is available again.
-   * @param runId - The errored run's ID.
+   * @param runId - The dead-letter run's ID.
    * @returns The updated run in idle state.
    * @throws {@link EngineError} with code {@link ErrorCode.RUN_NOT_FOUND} if the run does not exist.
-   * @throws {@link EngineError} with code {@link ErrorCode.INVALID_RUN_STATE} if the run is not in errored state.
+   * @throws {@link EngineError} with code {@link ErrorCode.INVALID_RUN_STATE} if the run is not in `dead-letter` status.
    */
   requeueDead(runId: string): Run
 
@@ -765,7 +784,7 @@ export interface Engine {
    * No new events will be accepted after calling this. If a dev server is running, it is
    * also closed. Once stopped, the engine no longer holds the Node.js event loop open.
    * @param opts - Optional graceful shutdown: `{ graceful: true }` waits for in-flight
-   *   handlers to finish before stopping. `timeoutMs` caps the wait (default: no limit).
+   *   handlers to finish before stopping. `timeoutMs` caps the wait (default: 30000ms).
    */
   stop(opts?: { graceful?: boolean; timeoutMs?: number }): Promise<void>
 
@@ -815,7 +834,7 @@ export type EventGraphEdge = {
 
 /**
  * The static event flow graph built from process registrations.
- * Represents the declared topology of your event pipeline — which
+ * Represents the declared topology of your event pipeline, which
  * processes connect to which via emitted events.
  *
  * Useful for visualization, validation, and the dev dashboard Graph tab.
@@ -831,17 +850,17 @@ export type EventGraph = {
 /**
  * Discriminated union of all engine lifecycle events emitted via {@link EngineOptions.onEvent}.
  *
- * - `run:start` — run claimed by dispatcher and about to execute.
- * - `run:complete` — handler returned `{ success: true }`. `durationMs` is current-attempt execution time.
- * - `run:error` — run reached errored state (handler threw, returned `{ success: false }`, or failed validation). `durationMs` is current-attempt execution time (0 if no handler ran).
- * - `run:retry` — handler threw but retries remain; run returns to idle.
- * - `run:dead` — retry budget exhausted; always followed by `run:error`.
- * - `run:resume` — a deferred run was resumed, creating child runs.
- * - `effect:complete` — durable effect executed successfully. `durationMs` is effect function wall-clock time.
- * - `effect:error` — durable effect threw. `durationMs` is time until the throw.
- * - `effect:replay` — durable effect replayed from store (no re-execution).
- * - `lease:reclaim` — a stale lease was reclaimed (one event per run).
- * - `internal:error` — an internal error was caught that would otherwise be swallowed.
+ * - `run:start`, run claimed by dispatcher and about to execute.
+ * - `run:complete`, handler returned `{ success: true }`. `durationMs` is current-attempt execution time.
+ * - `run:error`, run reached errored state (handler threw, returned `{ success: false }`, or failed validation). `durationMs` is current-attempt execution time (0 if no handler ran).
+ * - `run:retry`, handler threw but retries remain; run returns to idle.
+ * - `run:dead`, retry budget exhausted; always followed by `run:error`.
+ * - `run:resume`, a deferred run was resumed, creating child runs.
+ * - `effect:complete`, durable effect executed successfully. `durationMs` is effect function wall-clock time.
+ * - `effect:error`, durable effect threw. `durationMs` is time until the throw.
+ * - `effect:replay`, durable effect replayed from store (no re-execution).
+ * - `lease:reclaim`, a stale lease was reclaimed (one event per run).
+ * - `internal:error`, an internal error was caught that would otherwise be swallowed.
  */
 export type EngineEvent =
   | { type: 'run:start'; run: Run }

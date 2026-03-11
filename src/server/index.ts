@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import { cors } from 'hono/cors'
 import { serve } from '@hono/node-server'
 import type { DevServer } from '../types.js'
@@ -23,31 +24,81 @@ const MIME_TYPES: Record<string, string> = {
   '.html': 'text/html',
 }
 
+type DashboardAsset = {
+  content: string
+  contentType: string
+}
+
+/** Resolve the built engine dashboard directory, falling back to `dist/ui` when running from source. */
 export function resolveEngineUiDir(): string {
   const candidate = path.join(__dirname, '../ui')
   return fs.existsSync(path.join(candidate, 'app.js')) ? candidate : path.join(__dirname, '../../dist/ui')
 }
 
-export function serveDashboard(app: Hono, uiDir: string): void {
-  const indexHtml = readFileOr(path.join(uiDir, 'index.html'), fallbackHtml)
+function buildDashboardBundle(uiDir: string): { indexHtml: string; assets: Map<string, DashboardAsset> } {
+  const publicDir = path.join(__dirname, 'public')
+  const indexHtml = readFileOr(path.join(uiDir, 'index.html'), readFileOr(path.join(publicDir, 'index.html'), fallbackHtml))
+  const assets = new Map<string, DashboardAsset>()
 
-  app.get('/', (c) => c.html(indexHtml))
-
-  // Serve all built UI assets from dist/ui/
   const uiFiles = safeReadDir(uiDir)
   for (const file of uiFiles) {
     if (file === 'index.html') continue
     const ext = path.extname(file)
     const content = readFileOr(path.join(uiDir, file), '')
     if (content) {
-      app.get('/' + file, (c) => {
-        c.header('Content-Type', MIME_TYPES[ext] || 'application/octet-stream')
-        c.header('Cache-Control', 'public, max-age=3600')
-        return c.body(content)
+      assets.set('/' + file, {
+        content,
+        contentType: MIME_TYPES[ext] || 'application/octet-stream',
       })
     }
   }
 
+  const legacyCss = readFileOr(path.join(publicDir, 'brutalist.css'), '')
+  if (legacyCss && !assets.has('/brutalist.css')) {
+    assets.set('/brutalist.css', {
+      content: legacyCss,
+      contentType: 'text/css',
+    })
+  }
+
+  return { indexHtml, assets }
+}
+
+function respondWithAsset(c: Context, asset: DashboardAsset) {
+  c.header('Content-Type', asset.contentType)
+  c.header('Cache-Control', 'public, max-age=3600')
+  return c.body(asset.content)
+}
+
+function installDashboardFallback(app: Hono, uiDir: string): void {
+  const { indexHtml, assets } = buildDashboardBundle(uiDir)
+
+  app.notFound((c) => {
+    if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
+      return c.text('404 Not Found', 404)
+    }
+    if (c.req.path === '/') return c.html(indexHtml)
+    const asset = assets.get(c.req.path)
+    if (asset) return respondWithAsset(c, asset)
+    return c.text('404 Not Found', 404)
+  })
+}
+
+/**
+ * Mount the engine dashboard UI onto an existing Hono app.
+ *
+ * This serves `index.html` at `/` and any built dashboard assets from `uiDir`.
+ * It does not register API routes; pair it with {@link createDevServer} or
+ * {@link registerRoutes} when building a custom server.
+ */
+export function serveDashboard(app: Hono, uiDir: string): void {
+  const { indexHtml, assets } = buildDashboardBundle(uiDir)
+
+  app.get('/', (c) => c.html(indexHtml))
+
+  for (const [route, asset] of assets) {
+    app.get(route, (c) => respondWithAsset(c, asset))
+  }
 }
 
 function safeReadDir(dir: string): string[] {
@@ -58,11 +109,21 @@ function safeReadDir(dir: string): string[] {
   }
 }
 
-export function createDevServer(engine: RoutableEngine): DevServer {
+/**
+ * Create a development server exposing the engine HTTP API and, by default,
+ * the dashboard UI fallback.
+ *
+ * The returned server is not listening until {@link DevServer.serve} is called.
+ * Pass `dashboardFallback: false` when composing your own dashboard mounting.
+ */
+export function createDevServer(engine: RoutableEngine, opts?: { dashboardFallback?: boolean; uiDir?: string }): DevServer {
   const app = new Hono()
   app.use('*', cors())
 
   registerRoutes(app, engine)
+  if (opts?.dashboardFallback !== false) {
+    installDashboardFallback(app, opts?.uiDir ?? resolveEngineUiDir())
+  }
 
   let httpServer: ReturnType<typeof serve> | null = null
   const address = { host: '', port: 0 }
@@ -74,12 +135,24 @@ export function createDevServer(engine: RoutableEngine): DevServer {
       const host = opts?.host ?? '127.0.0.1'
       const port = opts?.port ?? 3000
       return new Promise<{ host: string; port: number }>((resolve, reject) => {
-        httpServer = serve({ fetch: app.fetch, hostname: host, port }, (info) => {
-          const addr = { host: info.address as string, port: info.port }
-          Object.assign(address, addr)
-          resolve(addr)
-        })
-        httpServer.on('error', reject)
+        let server: ReturnType<typeof serve>
+        const onError = (err: Error) => {
+          if (httpServer === server) httpServer = null
+          reject(err)
+        }
+        try {
+          server = serve({ fetch: app.fetch, hostname: host, port }, (info) => {
+            server.off('error', onError)
+            const addr = { host: info.address as string, port: info.port }
+            Object.assign(address, addr)
+            resolve(addr)
+          })
+        } catch (err) {
+          reject(err)
+          return
+        }
+        httpServer = server
+        server.once('error', onError)
       })
     },
     async stop() {

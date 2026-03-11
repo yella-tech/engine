@@ -107,6 +107,9 @@ function observabilityTests(label: string, storeOpts: EngineOptions) {
       if (resumes[0].type === 'run:resume') {
         expect(resumes[0].resumedRun.id).toBe(deferred.id)
         expect(resumes[0].childRuns.length).toBeGreaterThanOrEqual(1)
+        expect(resumes[0].resumedRun.result?.deferred).toBe(false)
+        expect(resumes[0].resumedRun.childRunIds).toHaveLength(resumes[0].childRuns.length)
+        expect(resumes[0].resumedRun.childRunIds).toContain(resumes[0].childRuns[0].id)
       }
     })
 
@@ -183,6 +186,27 @@ function observabilityTests(label: string, storeOpts: EngineOptions) {
       expect(legacyFinishes).toHaveLength(1)
       expect(events.filter((e) => e.type === 'run:start')).toHaveLength(1)
       expect(events.filter((e) => e.type === 'run:complete')).toHaveLength(1)
+    })
+
+    it('emits internal:error for swallowed legacy hook failures', async () => {
+      const internalErrors: string[] = []
+      setup({
+        onRunStart: () => {
+          throw new Error('hook blew up')
+        },
+        onInternalError: (_err, ctx) => internalErrors.push(ctx),
+      })
+      engine.register('proc', 'go', async () => ({ success: true }))
+      engine.emit('go', {})
+      await engine.drain()
+
+      const internalEvents = events.filter((e) => e.type === 'internal:error')
+      expect(internalErrors).toContain('onRunStart')
+      expect(internalEvents).toHaveLength(1)
+      if (internalEvents[0].type === 'internal:error') {
+        expect(internalEvents[0].context).toBe('onRunStart')
+      }
+      expect(engine.getMetrics().totals.internalErrors).toBe(1)
     })
 
     it('onEvent failure does not break engine', async () => {

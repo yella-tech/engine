@@ -244,6 +244,39 @@ describe('createSqliteRunStore', () => {
     })
   })
 
+  describe('pruneCompletedBefore', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('prunes completed non-deferred runs and reparents surviving children', () => {
+      const parent = store.create('parent', 'evt', null)
+      store.transition(parent.id, 'running')
+      store.setResult(parent.id, { success: true })
+      store.transition(parent.id, 'completed')
+
+      const deferred = store.create('review', 'evt', null)
+      store.transition(deferred.id, 'running')
+      store.setResult(deferred.id, { success: true, triggerEvent: 'next', deferred: true })
+      store.transition(deferred.id, 'completed')
+
+      vi.advanceTimersByTime(100)
+
+      const child = store.create('child', 'evt', null, parent.id)
+      const pruned = store.pruneCompletedBefore!(Date.now() - 50)
+
+      expect(pruned).toContain(parent.id)
+      expect(pruned).not.toContain(deferred.id)
+      expect(store.get(parent.id)).toBeNull()
+      expect(store.get(deferred.id)).not.toBeNull()
+      expect(store.get(child.id)?.parentRunId).toBeNull()
+    })
+  })
+
   // SQLite-specific tests
 
   describe('migrations', () => {

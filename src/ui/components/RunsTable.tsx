@@ -1,5 +1,5 @@
-import { Badge, DeferredBadge } from './Badge'
-import { shortId, timeAgo, isDeferred } from '../lib/format'
+import { Badge } from './Badge'
+import { shortId, timeAgo, runStatus } from '../lib/format'
 
 export function RunsTable({
   runs,
@@ -21,7 +21,7 @@ export function RunsTable({
             <th>ID</th>
             <th>Process</th>
             <th>Event</th>
-            <th>State</th>
+            <th>Status</th>
             <th>When</th>
           </tr>
         </thead>
@@ -32,13 +32,7 @@ export function RunsTable({
               <td>{r.processName || '--'}</td>
               <td>{r.eventName || '--'}</td>
               <td>
-                <Badge state={r.state} />
-                {isDeferred(r) && (
-                  <>
-                    {' '}
-                    <DeferredBadge />
-                  </>
-                )}
+                <Badge state={runStatus(r)} />
               </td>
               <td class="label-muted">{timeAgo(r.startedAt)}</td>
             </tr>

@@ -1,8 +1,8 @@
-import { Badge, DeferredBadge } from './Badge'
+import { Badge } from './Badge'
 import { JsonBlock } from './JsonBlock'
 import { DetailRow } from './DetailRow'
 import { EffectsList } from './EffectsList'
-import { isDeferred } from '../lib/format'
+import { isDeferred, runStatus } from '../lib/format'
 
 export function StepDetail({
   run,
@@ -21,15 +21,16 @@ export function StepDetail({
 }) {
   if (!run) return <div class="empty">Select a step</div>
 
+  const status = runStatus(run)
   const deferred = isDeferred(run)
+  const deadLetter = status === 'dead-letter'
 
   return (
     <div class="step-detail">
       <div class="step-detail-header">
         <span class="step-detail-title">{run.processName}</span>
         <div style="display:flex;gap:var(--space-2);align-items:center">
-          <Badge state={run.state} />
-          {deferred && <DeferredBadge />}
+          <Badge state={status} />
         </div>
       </div>
 
@@ -71,9 +72,11 @@ export function StepDetail({
             <button class="btn btn-sm" onClick={() => onRetry(run.id)}>
               Retry
             </button>
-            <button class="btn btn-sm" onClick={() => onRequeue(run.id)}>
-              Requeue
-            </button>
+            {deadLetter && (
+              <button class="btn btn-sm" onClick={() => onRequeue(run.id)}>
+                Requeue
+              </button>
+            )}
           </>
         )}
         <button class="btn btn-sm" onClick={() => onReemit(run.eventName, run.payload)}>

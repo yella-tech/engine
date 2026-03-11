@@ -187,7 +187,7 @@ export function createBus(registry: Registry, runStore: RunStore, opts: BusOptio
         opts.emitEvent({ type: 'run:retry', run: runStore.get(run.id)!, error, attempt })
       } else {
         runStore.setResult(run.id, { success: false, error, errorCode })
-        runStore.transition(run.id, 'errored', { error })
+        runStore.transition(run.id, 'errored', { error, event: retryPolicy ? 'dead-letter' : undefined })
         const errored = runStore.get(run.id)!
         if (retryPolicy) opts.emitEvent({ type: 'run:dead', run: errored, error })
         opts.emitEvent({ type: 'run:error', run: errored, error, durationMs })

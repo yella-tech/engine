@@ -23,6 +23,10 @@ function engineTests(label: string, opts: EngineOptions) {
       expect(completed[0].result!.success).toBe(true)
     })
 
+    it('invalid retention config throws INVALID_CONFIG', () => {
+      expect(() => createEngine({ ...opts, retention: 'later' })).toThrow('retention')
+    })
+
     it('event chain: parent triggers children, all share correlationId', async () => {
       engine = createEngine(opts)
       engine.register('triage', 'ticket', async () => ({

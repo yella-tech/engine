@@ -7,7 +7,7 @@ import { Badge } from './Badge'
 import { usePolling } from '../hooks/usePolling'
 import { useHashRoute, navigate } from '../hooks/useHashRoute'
 import { api } from '../lib/api'
-import { formatUptime, formatJson, shortId, timeStr } from '../lib/format'
+import { formatUptime, formatJson, shortId, timeStr, runStatus } from '../lib/format'
 import type { EmitState } from './EmitPanel'
 
 export interface DashboardConfig {
@@ -76,13 +76,13 @@ export function DashboardShell({ config }: { config: DashboardConfig }) {
       const runs = runsData.runs || []
       setRecentRuns({ runs, total: runsData.total ?? runs.length })
 
-      const snap = JSON.stringify(runs.map((r: any) => r.id + r.state))
+      const snap = JSON.stringify(runs.map((r: any) => r.id + runStatus(r)))
       if (lastSnapRef.current && snap !== lastSnapRef.current) {
         const newRuns = runs.filter((r: any) => !lastSnapRef.current.includes(r.id))
         newRuns.forEach((r: any) => {
           addTicker(
             <>
-              <span class="t-event">{r.eventName}</span> → {r.processName} <Badge state={r.state} />
+              <span class="t-event">{r.eventName}</span> → {r.processName} <Badge state={runStatus(r)} />
             </>,
           )
         })
@@ -167,7 +167,7 @@ export function DashboardShell({ config }: { config: DashboardConfig }) {
         const data = await api('/runs/' + runId + '/retry', { method: 'POST' })
         addTicker(
           <>
-            retried <span class="t-event">{shortId(runId)}</span> → <Badge state={data.state} />
+            retried <span class="t-event">{shortId(runId)}</span> → <Badge state={data.status || data.state} />
           </>,
         )
         setOverlay((prev) => {
@@ -184,7 +184,7 @@ export function DashboardShell({ config }: { config: DashboardConfig }) {
         const data = await api('/runs/' + runId + '/requeue', { method: 'POST' })
         addTicker(
           <>
-            requeued <span class="t-event">{shortId(runId)}</span> → <Badge state={data.state} />
+            requeued <span class="t-event">{shortId(runId)}</span> → <Badge state={data.status || data.state} />
           </>,
         )
         setOverlay((prev) => {

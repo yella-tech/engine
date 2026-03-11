@@ -1,5 +1,6 @@
 export function Badge({ state }: { state: string }) {
-  return <span class={`badge badge-${state}`}>{state}</span>
+  const label = state === 'dead-letter' ? 'dlq' : state
+  return <span class={`badge badge-${state}`}>{label}</span>
 }
 
 export function DeferredBadge() {

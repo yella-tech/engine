@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'preact/hooks'
+import { ChainPicker } from './ChainPicker'
 import { navigate } from '../hooks/useHashRoute'
 import { usePolling } from '../hooks/usePolling'
 import { api } from '../lib/api'
@@ -25,6 +26,7 @@ interface ExecutedNode {
   processName: string
   runId: string
   state: string
+  status: string
   duration?: number
 }
 
@@ -135,6 +137,27 @@ function fmtDuration(ms?: number) {
   return `${(ms / 1000).toFixed(1)}s`
 }
 
+function graphStatusLabel(status: string) {
+  return status === 'dead-letter' ? 'DLQ' : status.toUpperCase()
+}
+
+function graphStatusTone(status: string) {
+  switch (status) {
+    case 'running':
+      return { fill: 'var(--black)', text: 'var(--white)', stroke: 'var(--accent)', strokeWidth: 3, dash: undefined, rail: 'var(--accent)' }
+    case 'deferred':
+      return { fill: 'var(--white)', text: 'var(--black)', stroke: 'var(--accent-dim)', strokeWidth: 3, dash: '10 4', rail: 'var(--accent)' }
+    case 'dead-letter':
+      return { fill: 'var(--black)', text: 'var(--accent)', stroke: 'var(--accent)', strokeWidth: 3, dash: undefined, rail: 'var(--accent)' }
+    case 'errored':
+      return { fill: 'var(--white)', text: 'var(--black)', stroke: 'var(--black)', strokeWidth: 3, dash: '5 3', rail: 'var(--black)' }
+    case 'idle':
+      return { fill: 'var(--surface)', text: 'var(--black)', stroke: 'var(--muted)', strokeWidth: 2, dash: '6 3', rail: 'var(--muted)' }
+    default:
+      return { fill: 'var(--accent)', text: 'var(--black)', stroke: 'var(--black)', strokeWidth: 2.5, dash: undefined, rail: 'var(--black)' }
+  }
+}
+
 export interface GraphPanelProps {
   chainId?: string
   onNodeClick?: (runId: string) => void
@@ -194,6 +217,7 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
         processName: r.processName,
         runId: r.id,
         state: r.state,
+        status: r.status || r.state,
         duration: r.duration,
       })
     }
@@ -258,24 +282,14 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
   const showGraph = mergedNodes.length > 0 && (chainRuns || hasStaticGraph)
 
   const picker = (
-    <div class="field mb-5">
-      <span class="label">Select a completed chain to graph</span>
-      <select
-        class="select"
-        value={chainId || ''}
-        onChange={(e) => {
-          const v = (e.target as HTMLSelectElement).value
-          navigate(v ? `/graph/${v}` : '/graph')
-        }}
-      >
-        <option value="">-- select a chain --</option>
-        {chainOptions.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </div>
+    <ChainPicker
+      label="Select a completed chain to graph"
+      placeholder="Filter by process, event, or time"
+      emptyLabel="No chains match that filter"
+      options={chainOptions}
+      selectedId={chainId || ''}
+      onChange={(id) => navigate(id ? `/graph/${id}` : '/graph')}
+    />
   )
 
   if (!showGraph) {
@@ -309,7 +323,7 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
               <polygon points="0 0, 10 3.5, 0 7" fill="#000" />
             </marker>
           </defs>
-          {/* Render edges — ghost first, then executed on top */}
+          {/* Render edges, ghost first, then executed on top */}
           {mergedEdges.map((e, i) => {
             const from = positions.get(e.from)
             const to = positions.get(e.to)
@@ -341,30 +355,28 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
             if (!pos) return null
             const exec = executedMap.get(n.name)
             const isExecuted = !!exec
-            const isErrored = exec?.state === 'errored' || exec?.state === 'dead'
-            const isIdle = exec?.state === 'idle'
             const clickable = isExecuted && onNodeClick
-            const nodeFill = isErrored ? 'var(--black)' : isIdle ? '#eee' : isExecuted ? 'var(--accent)' : 'var(--white)'
-            const nodeText = isErrored ? 'var(--white)' : 'var(--black)'
+            const tone = exec ? graphStatusTone(exec.status) : null
             return (
               <g key={n.name} style={clickable ? 'cursor:pointer' : undefined} onClick={() => clickable && onNodeClick!(exec!.runId)}>
+                {tone && <rect x={pos.x} y={pos.y} width="8" height={NODE_H} fill={tone.rail} />}
                 <rect
                   x={pos.x}
                   y={pos.y}
                   width={NODE_W}
                   height={NODE_H}
                   rx="0"
-                  fill={nodeFill}
-                  stroke={isExecuted ? 'var(--black)' : '#ccc'}
-                  stroke-width={isExecuted ? 2 : 1.5}
-                  stroke-dasharray={isExecuted ? undefined : '6 3'}
+                  fill={tone ? tone.fill : 'var(--white)'}
+                  stroke={tone ? tone.stroke : '#ccc'}
+                  stroke-width={tone ? tone.strokeWidth : 1.5}
+                  stroke-dasharray={tone ? tone.dash : '6 3'}
                 />
-                <text x={pos.x + NODE_W / 2} y={pos.y + 22} text-anchor="middle" font-size="12" font-weight="700" fill={nodeText} font-family="var(--font)">
+                <text x={pos.x + NODE_W / 2 + (tone ? 4 : 0)} y={pos.y + 22} text-anchor="middle" font-size="12" font-weight="700" fill={tone ? tone.text : 'var(--black)'} font-family="var(--font)">
                   {n.name.toUpperCase()}
                 </text>
                 {isExecuted ? (
-                  <text x={pos.x + NODE_W / 2} y={pos.y + 40} text-anchor="middle" font-size="9" fill={nodeText} font-family="var(--font)">
-                    {exec!.state.toUpperCase()}
+                  <text x={pos.x + NODE_W / 2 + (tone ? 4 : 0)} y={pos.y + 40} text-anchor="middle" font-size="9" fill={tone ? tone.text : 'var(--black)'} font-family="var(--font)">
+                    {graphStatusLabel(exec!.status)}
                     {exec!.duration != null ? ` · ${fmtDuration(exec!.duration)}` : ''}
                   </text>
                 ) : (
@@ -383,6 +395,12 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
         </span>
         <span>
           <span class="graph-swatch graph-swatch-static"></span> declared
+        </span>
+        <span>
+          <span class="graph-swatch graph-swatch-deferred"></span> deferred
+        </span>
+        <span>
+          <span class="graph-swatch graph-swatch-dlq"></span> dlq
         </span>
       </div>
     </div>

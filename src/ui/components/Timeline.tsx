@@ -1,5 +1,5 @@
-import { Badge, DeferredBadge } from './Badge'
-import { isDeferred } from '../lib/format'
+import { Badge } from './Badge'
+import { runStatus } from '../lib/format'
 
 export function Timeline({
   chain,
@@ -11,9 +11,9 @@ export function Timeline({
   onSelect: (i: number) => void
 }) {
   const stateIcon = (run: any) => {
-    if (isDeferred(run)) return '\u23F8'
-    const state = run.state
-    return state === 'completed' ? '\u2713' : state === 'errored' ? '\u2717' : state === 'running' ? '\u25B6' : '\u25CF'
+    const status = runStatus(run)
+    if (status === 'deferred') return '\u23F8'
+    return status === 'completed' ? '\u2713' : status === 'errored' || status === 'dead-letter' ? '\u2717' : status === 'running' ? '\u25B6' : '\u25CF'
   }
 
   return (
@@ -21,9 +21,9 @@ export function Timeline({
       {chain.map((c: any, i: number) => (
         <div key={c.id} class={`timeline-step ${i === selectedIdx ? 'selected' : ''}`} onClick={() => onSelect(i)}>
           <span class="timeline-step-num">{i + 1}</span>
-          <span class={`timeline-step-dot ${isDeferred(c) ? 'deferred' : c.state}`}></span>
+          <span class={`timeline-step-dot ${runStatus(c)}`}></span>
           <span class="timeline-step-name">{c.processName}</span>
-          {isDeferred(c) ? <DeferredBadge /> : <Badge state={c.state} />}
+          <Badge state={runStatus(c)} />
           <span class="timeline-step-icon">{stateIcon(c)}</span>
         </div>
       ))}

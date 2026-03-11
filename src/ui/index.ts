@@ -34,6 +34,6 @@ export type { RouteMatch } from './hooks/useHashRoute'
 
 // Utilities
 export { api } from './lib/api'
-export { shortId, formatUptime, formatJson, timeAgo, timeStr, stripEffectPrefix, isDeferred } from './lib/format'
+export { shortId, formatUptime, formatJson, timeAgo, timeStr, stripEffectPrefix, runStatus, isDeferred } from './lib/format'
 export { compressTimeline } from './lib/compress'
 export type { CompressedTimeline } from './lib/compress'

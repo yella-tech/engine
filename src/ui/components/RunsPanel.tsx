@@ -15,7 +15,7 @@ export function RunsPanel({ onRowClick, activeRunId }: { onRowClick: (id: string
   const doFetch = useCallback(async () => {
     try {
       const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) })
-      if (filter !== 'all') params.set('state', filter)
+      if (filter !== 'all') params.set('status', filter)
       if (rootOnly) params.set('root', 'true')
       const result = await api('/runs?' + params)
       setData({ runs: result.runs || [], total: result.total || 0 })

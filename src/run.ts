@@ -1,4 +1,5 @@
 import crypto from 'node:crypto'
+import { isDeferredRun } from './status.js'
 import type { HandlerResult, ProcessState, Run, RunStore, TimelineEntry } from './types.js'
 import { VALID_TRANSITIONS } from './types.js'
 
@@ -261,6 +262,39 @@ export function createRunStore(): RunStore {
     return { runs: filtered.slice(offset, offset + limit).map(cloneRun), total: filtered.length }
   }
 
+  function pruneCompletedBefore(cutoffMs: number): string[] {
+    const prunedIds = new Set<string>()
+    const impactedParentIds = new Set<string>()
+
+    for (const [id, run] of runs.entries()) {
+      if (run.state !== 'completed' || run.completedAt === null || run.completedAt >= cutoffMs || isDeferredRun(run)) {
+        continue
+      }
+      prunedIds.add(id)
+      if (run.parentRunId) impactedParentIds.add(run.parentRunId)
+    }
+
+    if (prunedIds.size === 0) return []
+
+    for (const id of prunedIds) {
+      runs.delete(id)
+    }
+
+    for (const parentId of impactedParentIds) {
+      const parent = runs.get(parentId)
+      if (!parent) continue
+      parent.childRunIds = parent.childRunIds.filter((childId) => !prunedIds.has(childId))
+    }
+
+    for (const run of runs.values()) {
+      if (run.parentRunId && prunedIds.has(run.parentRunId)) {
+        run.parentRunId = null
+      }
+    }
+
+    return Array.from(prunedIds)
+  }
+
   return {
     create,
     transition,
@@ -283,5 +317,6 @@ export function createRunStore(): RunStore {
     countByState,
     hasState,
     getByStatePaginated,
+    pruneCompletedBefore,
   }
 }

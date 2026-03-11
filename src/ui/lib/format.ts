@@ -1,3 +1,5 @@
+import { getRunStatus } from '../../status.js'
+
 export function shortId(id: string) {
   return id && id.length > 12 ? id.slice(0, 8) + '...' : id || '--'
 }
@@ -48,6 +50,11 @@ export function stripEffectPrefix(key: string) {
   return key
 }
 
+export function runStatus(run: any) {
+  if (!run) return 'idle'
+  return run.status ?? getRunStatus(run)
+}
+
 export function isDeferred(run: any) {
-  return run?.result?.deferred && run?.result?.triggerEvent
+  return runStatus(run) === 'deferred'
 }

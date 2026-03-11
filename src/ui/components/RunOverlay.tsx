@@ -1,10 +1,10 @@
-import { Badge, DeferredBadge } from './Badge'
+import { Badge } from './Badge'
 import { DetailRow } from './DetailRow'
 import { Timeline } from './Timeline'
 import { StepDetail } from './StepDetail'
 import { usePolling } from '../hooks/usePolling'
 import { useEscapeKey } from '../hooks/useEscapeKey'
-import { shortId, isDeferred } from '../lib/format'
+import { shortId, runStatus } from '../lib/format'
 
 export interface OverlayState {
   open: boolean
@@ -62,14 +62,8 @@ export function RunOverlay({ overlay, actions }: { overlay: OverlayState; action
             <DetailRow label="ID">{run.id}</DetailRow>
             <DetailRow label="Process">{run.processName}</DetailRow>
             <DetailRow label="Event">{run.eventName}</DetailRow>
-            <DetailRow label="State">
-              <Badge state={run.state} />
-              {isDeferred(run) && (
-                <>
-                  {' '}
-                  <DeferredBadge />
-                </>
-              )}
+            <DetailRow label="Status">
+              <Badge state={runStatus(run)} />
             </DetailRow>
             <DetailRow label="Correlation">{shortId(run.correlationId)}</DetailRow>
           </>

@@ -1,7 +1,8 @@
-import { useState, useCallback, useRef } from 'preact/hooks'
+import { useState, useCallback, useEffect } from 'preact/hooks'
 import { TracePicker } from './TracePicker'
 import { GanttChart } from './GanttChart'
 import { usePolling } from '../hooks/usePolling'
+import { navigate } from '../hooks/useHashRoute'
 import { api } from '../lib/api'
 
 export function TracePanel({ chainId, onSpanClick }: { chainId?: string; onSpanClick: (id: string) => void }) {
@@ -10,6 +11,17 @@ export function TracePanel({ chainId, onSpanClick }: { chainId?: string; onSpanC
   const [traceData, setTraceData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const activeId = chainId || selectedId
+
+  const loadTrace = useCallback(async (id: string) => {
+    setLoading(true)
+    try {
+      const data = await api('/runs/' + id + '/trace')
+      setTraceData(data)
+    } catch {
+      setTraceData(null)
+    }
+    setLoading(false)
+  }, [])
 
   const fetchData = useCallback(async () => {
     try {
@@ -33,17 +45,33 @@ export function TracePanel({ chainId, onSpanClick }: { chainId?: string; onSpanC
 
   usePolling(fetchData, 3000, true)
 
+  useEffect(() => {
+    setSelectedId(chainId || '')
+    if (!chainId) {
+      setTraceData(null)
+      setLoading(false)
+      return
+    }
+    void loadTrace(chainId)
+  }, [chainId, loadTrace])
+
   const onSelect = useCallback((id: string) => {
     setSelectedId(id)
-    if (!id) setTraceData(null)
-  }, [])
+    if (!id) {
+      setTraceData(null)
+      navigate('/trace')
+      return
+    }
+    navigate(`/trace/${id}`)
+    void loadTrace(id)
+  }, [loadTrace])
 
   return (
     <div>
-      <TracePicker options={options} selectedId={selectedId} onChange={onSelect} />
+      <TracePicker options={options} selectedId={activeId} onChange={onSelect} />
       {loading && <div class="empty">Loading trace...</div>}
       {!loading && traceData && <GanttChart trace={traceData} onSpanClick={onSpanClick} />}
-      {!loading && selectedId && traceData && (!traceData.spans || !traceData.spans.length) && <div class="empty">No trace data</div>}
+      {!loading && activeId && traceData && (!traceData.spans || !traceData.spans.length) && <div class="empty">No trace data</div>}
     </div>
   )
 }

@@ -4,26 +4,37 @@ export interface CompressedTimeline {
   gaps: { start: number; end: number; size: number }[]
 }
 
-export function compressTimeline(spans: any[], minTime: number, durationMs: number): CompressedTimeline {
+export function compressTimeline(spans: any[], minTime: number, durationMs: number, explicitGaps?: Array<{ start: number; end: number; durationMs?: number }>): CompressedTimeline {
   const GAP_THRESHOLD = 500 // ms - gaps larger than this get collapsed
   const GAP_DISPLAY = 40 // ms - collapsed gaps show as this width
 
-  // Collect all timestamps and sort
-  const events: number[] = []
-  for (const s of spans) {
-    if (s.idleAt !== null) events.push(s.idleAt)
-    if (s.runningAt !== null) events.push(s.runningAt)
-    if (s.completedAt !== null) events.push(s.completedAt)
-  }
-  events.sort((a, b) => a - b)
-  if (!events.length) return { map: () => 0, totalCompressed: 1, gaps: [] }
+  let gaps: { start: number; end: number; size: number }[] = []
 
-  // Find gaps between consecutive event clusters
-  const gaps: { start: number; end: number; size: number }[] = []
-  for (let i = 1; i < events.length; i++) {
-    const gap = events[i] - events[i - 1]
-    if (gap > GAP_THRESHOLD) {
-      gaps.push({ start: events[i - 1], end: events[i], size: gap })
+  if (explicitGaps && explicitGaps.length > 0) {
+    gaps = explicitGaps
+      .map((gap) => ({
+        start: gap.start,
+        end: gap.end,
+        size: gap.durationMs ?? gap.end - gap.start,
+      }))
+      .sort((a, b) => a.start - b.start)
+  } else {
+    // Collect all timestamps and sort
+    const events: number[] = []
+    for (const s of spans) {
+      if (s.idleAt !== null) events.push(s.idleAt)
+      if (s.runningAt !== null) events.push(s.runningAt)
+      if (s.completedAt !== null) events.push(s.completedAt)
+    }
+    events.sort((a, b) => a - b)
+    if (!events.length) return { map: () => 0, totalCompressed: 1, gaps: [] }
+
+    // Find gaps between consecutive event clusters
+    for (let i = 1; i < events.length; i++) {
+      const gap = events[i] - events[i - 1]
+      if (gap > GAP_THRESHOLD) {
+        gaps.push({ start: events[i - 1], end: events[i], size: gap })
+      }
     }
   }
 

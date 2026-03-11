@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import Database from 'better-sqlite3'
+import { isDeferredRun } from './status.js'
 import type { EffectRecord, EffectStore, HandlerResult, ProcessState, Run, RunStore, TimelineEntry } from './types.js'
 import { VALID_TRANSITIONS } from './types.js'
 
@@ -187,6 +188,9 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     paginatedAllRoot: db.prepare("SELECT * FROM runs WHERE parent_run_id IS NULL ORDER BY started_at DESC LIMIT ? OFFSET ?"),
     countByStateRoot: db.prepare("SELECT COUNT(*) as cnt FROM runs WHERE state = ? AND parent_run_id IS NULL"),
     countAllRoot: db.prepare("SELECT COUNT(*) as cnt FROM runs WHERE parent_run_id IS NULL"),
+    pruneCompletedCandidates: db.prepare("SELECT * FROM runs WHERE state = 'completed' AND completed_at IS NOT NULL AND completed_at < ?"),
+    clearParentRunIds: db.prepare('UPDATE runs SET parent_run_id = NULL WHERE parent_run_id = ?'),
+    deleteById: db.prepare('DELETE FROM runs WHERE id = ?'),
   }
 
   function create(
@@ -438,6 +442,33 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     return { runs: rows.map(rowToRun), total }
   }
 
+  function pruneCompletedBefore(cutoffMs: number): string[] {
+    const pruneTransaction = db.transaction(() => {
+      const candidateRows = stmts.pruneCompletedCandidates.all(cutoffMs) as RunRow[]
+      const candidates = candidateRows.map(rowToRun).filter((run) => !isDeferredRun(run))
+      if (candidates.length === 0) return []
+
+      const prunedIds = new Set(candidates.map((run) => run.id))
+      const impactedParentIds = new Set(candidates.map((run) => run.parentRunId).filter((id): id is string => id !== null))
+
+      for (const parentId of impactedParentIds) {
+        const parentRow = stmts.getById.get(parentId) as RunRow | undefined
+        if (!parentRow) continue
+        const nextChildIds = (JSON.parse(parentRow.child_run_ids) as string[]).filter((childId) => !prunedIds.has(childId))
+        stmts.updateChildRunIds.run(JSON.stringify(nextChildIds), parentId)
+      }
+
+      for (const runId of prunedIds) {
+        stmts.clearParentRunIds.run(runId)
+        stmts.deleteById.run(runId)
+      }
+
+      return Array.from(prunedIds)
+    })
+
+    return pruneTransaction()
+  }
+
   function close() {
     db.close()
   }
@@ -497,6 +528,7 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     countByState,
     hasState,
     getByStatePaginated,
+    pruneCompletedBefore,
     close,
   }
 }
@@ -519,6 +551,7 @@ function createSqliteEffectStore(db: Database.Database): EffectStore {
     `),
     markCompleted: db.prepare("UPDATE run_effects SET state='completed', output=?, completed_at=? WHERE run_id=? AND effect_key=?"),
     markFailed: db.prepare("UPDATE run_effects SET state='failed', error=?, completed_at=? WHERE run_id=? AND effect_key=?"),
+    deleteByRunId: db.prepare('DELETE FROM run_effects WHERE run_id = ?'),
   }
 
   type EffectRow = {
@@ -565,7 +598,16 @@ function createSqliteEffectStore(db: Database.Database): EffectStore {
     return rows.map(rowToEffect)
   }
 
-  return { getEffect, getEffects, markStarted, markCompleted, markFailed }
+  function deleteEffectsForRuns(runIds: string[]): number {
+    let deleted = 0
+    for (const runId of runIds) {
+      const result = stmts.deleteByRunId.run(runId)
+      deleted += result.changes
+    }
+    return deleted
+  }
+
+  return { getEffect, getEffects, markStarted, markCompleted, markFailed, deleteEffectsForRuns }
 }
 
 export function createSqliteStores(dbPath: string): { runStore: RunStore; effectStore: EffectStore; close: () => void } {

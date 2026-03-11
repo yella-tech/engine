@@ -29,6 +29,7 @@
     "test": "vitest run",
     "test:watch": "vitest --ui --coverage",
     "example": "tsx examples/example.ts",
+    "example:approval": "tsx examples/approval-flow.ts",
     "load-test": "tsx examples/load-test.ts",
     "format": "prettier --write 'src/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.ts'"

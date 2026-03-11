@@ -140,6 +140,25 @@ function effectTests(storeType: string, engineOpts: EngineOptions) {
       // Handler was called twice (initial + retry)
       expect(handlerCallCount).toBe(2)
     })
+
+    it('retention prunes completed runs and effect records but keeps deferred runs', async () => {
+      engine = createEngine({ ...engineOpts, retention: '25ms' })
+      engine.register('effected', 'evt', async (ctx) => {
+        await ctx.effect('persisted', () => ({ ok: true }))
+        return { success: true }
+      })
+      engine.register('review', 'hold', async () => ({ success: true, triggerEvent: 'next', deferred: true }))
+
+      const [completed] = await engine.emitAndWait('evt', null)
+      const [deferred] = await engine.emitAndWait('hold', null)
+      expect(engine.getEffects(completed.id)).toHaveLength(1)
+
+      await new Promise((r) => setTimeout(r, 80))
+
+      expect(engine.getRun(completed.id)).toBeNull()
+      expect(engine.getEffects(completed.id)).toHaveLength(0)
+      expect(engine.getRun(deferred.id)).not.toBeNull()
+    })
   })
 }
 

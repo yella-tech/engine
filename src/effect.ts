@@ -41,5 +41,16 @@ export function createEffectStore(): EffectStore {
     return inner ? Array.from(inner.values()) : []
   }
 
-  return { getEffect, getEffects, markStarted, markCompleted, markFailed }
+  function deleteEffectsForRuns(runIds: string[]): number {
+    let deleted = 0
+    for (const runId of runIds) {
+      const inner = effects.get(runId)
+      if (!inner) continue
+      deleted += inner.size
+      effects.delete(runId)
+    }
+    return deleted
+  }
+
+  return { getEffect, getEffects, markStarted, markCompleted, markFailed, deleteEffectsForRuns }
 }

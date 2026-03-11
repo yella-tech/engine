@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { createEngine } from './index.js'
 import { createRunStore } from './run.js'
+import { getRunStatus } from './status.js'
 import type { EngineOptions } from './types.js'
 
 // ── Graceful stop ──
@@ -121,6 +122,7 @@ describe('repair APIs', () => {
     const errored = engine.getRun(run.id)!
     expect(errored.state).toBe('errored')
     expect(errored.attempt).toBeGreaterThan(0)
+    expect(getRunStatus(errored)).toBe('dead-letter')
 
     const requeued = engine.requeueDead(run.id)
     expect(requeued.state).toBe('idle')
@@ -128,6 +130,15 @@ describe('repair APIs', () => {
     // since transition doesn't change attempt, but resetAttempt was called before)
     const fresh = engine.getRun(run.id)!
     expect(fresh.attempt).toBe(0)
+  })
+
+  it('requeueDead: throws for non-dead-letter errored run', async () => {
+    engine = createEngine()
+    engine.register('proc', 'evt', async () => ({ success: false, error: 'plain error' }))
+    const [run] = engine.emit('evt', null)
+    await engine.drain()
+
+    expect(() => engine.requeueDead(run.id)).toThrow('Cannot requeue run in status: errored')
   })
 
   it('cancelRun: idle -> errored with cancelled error', () => {
@@ -196,7 +207,7 @@ describe('invariants', () => {
     // retryRun also rejects
     expect(() => engine.retryRun(run.id)).toThrow('Cannot retry run in state: completed')
     // requeueDead also rejects
-    expect(() => engine.requeueDead(run.id)).toThrow('Cannot requeue run in state: completed')
+    expect(() => engine.requeueDead(run.id)).toThrow('Cannot requeue run in status: completed')
   })
 
   it('errored runs can only transition to idle (via repair)', async () => {
