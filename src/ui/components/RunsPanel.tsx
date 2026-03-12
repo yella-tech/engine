@@ -1,9 +1,11 @@
-import { useState, useCallback } from 'preact/hooks'
+import { useState, useCallback, useRef } from 'preact/hooks'
 import { FilterTabs } from './FilterTabs'
 import { RunsTable } from './RunsTable'
 import { Pagination } from './Pagination'
 import { usePolling } from '../hooks/usePolling'
-import { api } from '../lib/api'
+import { useEventStream } from '../hooks/useEventStream'
+import { rpc } from '../lib/rpc'
+import type { EngineStreamEvent } from '../../types.js'
 
 export function RunsPanel({ onRowClick, activeRunId }: { onRowClick: (id: string) => void; activeRunId: string | null }) {
   const [filter, setFilter] = useState('all')
@@ -11,18 +13,50 @@ export function RunsPanel({ onRowClick, activeRunId }: { onRowClick: (id: string
   const [offset, setOffset] = useState(0)
   const [data, setData] = useState<{ runs: any[]; total: number }>({ runs: [], total: 0 })
   const PAGE_SIZE = 50
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fetchInFlightRef = useRef(false)
+  const lastRefreshAtRef = useRef(0)
 
   const doFetch = useCallback(async () => {
+    if (fetchInFlightRef.current) return
+    fetchInFlightRef.current = true
     try {
-      const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) })
-      if (filter !== 'all') params.set('status', filter)
-      if (rootOnly) params.set('root', 'true')
-      const result = await api('/runs?' + params)
+      const result = await rpc.runs.list({
+        limit: PAGE_SIZE,
+        offset,
+        status: filter !== 'all' ? filter : undefined,
+        root: rootOnly || undefined,
+      })
       setData({ runs: result.runs || [], total: result.total || 0 })
     } catch {}
+    finally {
+      fetchInFlightRef.current = false
+      lastRefreshAtRef.current = Date.now()
+    }
   }, [filter, offset, rootOnly])
 
-  usePolling(doFetch, 3000, true)
+  const scheduleRefresh = useCallback((delayMs = 200) => {
+    if (refreshTimerRef.current) return
+    const minIntervalMs = 5_000
+    const sinceLast = Date.now() - lastRefreshAtRef.current
+    const effectiveDelay = Math.max(delayMs, sinceLast >= minIntervalMs ? 0 : minIntervalMs - sinceLast)
+    refreshTimerRef.current = setTimeout(() => {
+      refreshTimerRef.current = null
+      void doFetch()
+    }, effectiveDelay)
+  }, [doFetch])
+
+  usePolling(doFetch, 30_000, true)
+  useEventStream<EngineStreamEvent>(
+    '/events',
+    (event) => {
+      if (event.kind !== 'event') return
+      if (event.topics.includes('runs')) {
+        scheduleRefresh()
+      }
+    },
+    true,
+  )
 
   const onFilterChange = (f: string) => {
     setFilter(f)

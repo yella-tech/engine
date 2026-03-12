@@ -1,5 +1,6 @@
 import { render } from 'preact'
 import { DashboardShell, type DashboardConfig, type DashboardContext } from './components/DashboardShell'
+import { ObservabilitySummaryGrid } from './components/ObservabilitySummaryGrid'
 import { OverviewPanel } from './components/OverviewPanel'
 import { ProcessesPanel } from './components/ProcessesPanel'
 import { RunsPanel } from './components/RunsPanel'
@@ -7,8 +8,8 @@ import { TracePanel } from './components/TracePanel'
 import { GraphPanel } from './components/GraphPanel'
 import { EmitPanel } from './components/EmitPanel'
 import { icons } from './components/Nav'
-import { api } from './lib/api'
 import { formatJson } from './lib/format'
+import { rpc } from './lib/rpc'
 import './styles.css'
 
 function App() {
@@ -27,7 +28,17 @@ function App() {
     renderPanel: (tab, ctx) => {
       switch (tab) {
         case 'overview':
-          return <OverviewPanel health={ctx.health} recentRuns={ctx.recentRuns} onRowClick={ctx.overlayActions.openOverlay} activeRunId={ctx.overlay.open ? ctx.overlay.runId : null} rootOnly={ctx.overviewRootOnly} onRootOnlyChange={ctx.setOverviewRootOnly} />
+          return (
+            <OverviewPanel
+              health={ctx.health}
+              recentRuns={ctx.recentRuns}
+              onRowClick={ctx.overlayActions.openOverlay}
+              activeRunId={ctx.overlay.open ? ctx.overlay.runId : null}
+              extraStats={<ObservabilitySummaryGrid summary={ctx.observability.summary} />}
+              rootOnly={ctx.overviewRootOnly}
+              onRootOnlyChange={ctx.setOverviewRootOnly}
+            />
+          )
         case 'processes':
           return (
             <ProcessesPanel
@@ -77,11 +88,7 @@ async function handleEmit(ctx: DashboardContext) {
 
   ctx.setEmit((prev) => ({ ...prev, submitting: true }))
   try {
-    const data = await api('/emit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+    const data = await rpc.emit.post(body)
     ctx.setEmit((prev) => ({ ...prev, submitting: false, result: { ok: true, text: formatJson(data) } }))
     ctx.addTicker(
       <>

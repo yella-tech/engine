@@ -31,6 +31,62 @@ function routeTests(label: string, opts: EngineOptions) {
       expect(data.processes).toHaveLength(1)
     })
 
+    it('GET /observability returns summary and buckets', async () => {
+      setup()
+      engine.register('proc', 'go', async (ctx) => {
+        await ctx.effect('obs', async () => 'done')
+        return { success: true }
+      })
+      engine.emit('go', {})
+      await engine.drain()
+
+      const res = await app.request('/observability?window=1h')
+      const data = await res.json()
+      expect(data.summary.runs.completed).toBe(1)
+      expect(data.summary.effects.completed).toBe(1)
+      expect(data.buckets.length).toBeGreaterThanOrEqual(1)
+      expect(typeof data.bucketSizeMs).toBe('number')
+    })
+
+    it('GET /overview returns health and recent runs in one payload', async () => {
+      setup()
+      engine.register('proc', 'go', async () => ({ success: true }))
+      engine.emit('go', {})
+      await engine.drain()
+
+      const res = await app.request('/overview?limit=10&root=true&observabilityWindow=24h')
+      const data = await res.json()
+      expect(data.health.status).toBe('ok')
+      expect(data.recentRuns.total).toBe(1)
+      expect(data.recentRuns.runs).toHaveLength(1)
+      expect(data.observability.summary.runs.completed).toBe(1)
+    })
+
+    it('GET /events streams connected and lifecycle invalidation events', async () => {
+      setup()
+      engine.register('proc', 'go', async () => ({ success: true }))
+
+      const res = await app.request('/events')
+      expect(res.status).toBe(200)
+      expect(res.headers.get('content-type')).toContain('text/event-stream')
+
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+
+      const firstChunk = await reader.read()
+      expect(decoder.decode(firstChunk.value)).toContain('"kind":"connected"')
+
+      engine.emit('go', {})
+
+      const nextChunk = await reader.read()
+      const nextText = decoder.decode(nextChunk.value)
+      expect(nextText).toContain('"kind":"event"')
+      expect(nextText).toContain('"eventType":"run:start"')
+
+      await reader.cancel()
+      await engine.drain()
+    })
+
     it('GET /runs returns runs by state', async () => {
       setup()
       engine.register('proc', 'go', async () => ({ success: true }))
@@ -212,6 +268,34 @@ function routeTests(label: string, opts: EngineOptions) {
       const data = await res.json()
       expect(data.runs.length).toBeGreaterThanOrEqual(2)
       expect(data.runs.every((run: any) => typeof run.status === 'string')).toBe(true)
+    })
+
+    it('GET /runs/:id/overlay resolves root chain and selected step in one payload', async () => {
+      setup()
+      engine.register('step1', 'start', async () => ({ success: true, triggerEvent: 'middle' }))
+      engine.register('step2', 'middle', async (ctx) => {
+        await ctx.effect('overlay-effect', async () => 'done')
+        return { success: true, triggerEvent: 'end' }
+      })
+      engine.register('step3', 'end', async () => ({ success: true }))
+      engine.emit('start', {})
+      await engine.drain()
+
+      const root = engine.getCompleted().find((r) => r.parentRunId === null)!
+      const chain = engine.getChain(root.id)
+      const middle = chain.find((r) => r.processName === 'step2')!
+      const end = chain.find((r) => r.processName === 'step3')!
+
+      const res = await app.request(`/runs/${end.id}/overlay?selectedId=${middle.id}`)
+      const data = await res.json()
+
+      expect(data.rootRunId).toBe(root.id)
+      expect(data.run.id).toBe(end.id)
+      expect(data.selectedRun.id).toBe(middle.id)
+      expect(data.selectedStepIdx).toBeGreaterThanOrEqual(0)
+      expect(data.chain).toHaveLength(3)
+      expect(data.effects).toHaveLength(1)
+      expect(data.effects[0].effectKey).toBe('overlay-effect')
     })
 
     it('GET /runs/:id/trace returns trace spans', async () => {

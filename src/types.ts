@@ -740,6 +740,24 @@ export interface Engine {
   getMetrics(): EngineMetrics
 
   /**
+   * Retrieve bucketed engine observability rollups for a time window.
+   *
+   * The result merges persisted buckets with any in-memory measurements that
+   * have not been flushed yet, so the view stays fresh even with batched writes.
+   */
+  getObservability(query?: EngineObservabilityQuery): EngineObservabilityReport
+
+  /**
+   * Subscribe to engine lifecycle events as they happen.
+   *
+   * Intended for dashboards and streaming adapters that want low-latency
+   * invalidation without replacing the durable observability rollups.
+   *
+   * Returns an unsubscribe function that removes the listener.
+   */
+  subscribeEvents(listener: (event: EngineEvent) => void): () => void
+
+  /**
    * Retry an errored run. Resets it to idle state for re-execution.
    * @param runId - The errored run's ID.
    * @returns The updated run in idle state.
@@ -886,6 +904,114 @@ export type EngineMetrics = {
   queue: { idle: number; running: number; completed: number; errored: number }
   /** Runtime counters since engine creation (reset on restart). */
   totals: { retries: number; deadLetters: number; resumes: number; leaseReclaims: number; internalErrors: number }
+}
+
+/** Approximate duration histogram used for percentile estimation in observability rollups. */
+export type DurationHistogram = {
+  le10ms: number
+  le50ms: number
+  le100ms: number
+  le250ms: number
+  le500ms: number
+  le1000ms: number
+  le2500ms: number
+  le5000ms: number
+  le10000ms: number
+  gt10000ms: number
+}
+
+/** Aggregated duration statistics for runs/effects over an observability bucket. */
+export type DurationStats = {
+  count: number
+  sumMs: number
+  minMs: number | null
+  maxMs: number | null
+  avgMs: number | null
+  p50Ms: number | null
+  p95Ms: number | null
+  histogram: DurationHistogram
+}
+
+/** Bucketed engine observability measurements for a fixed time interval. */
+export type EngineObservabilityBucket = {
+  bucketStart: number
+  bucketSizeMs: number
+  runs: {
+    started: number
+    completed: number
+    failed: number
+    retried: number
+    deadLetters: number
+    resumed: number
+    successRate: number | null
+    duration: DurationStats
+  }
+  effects: {
+    completed: number
+    failed: number
+    replayed: number
+    successRate: number | null
+    duration: DurationStats
+  }
+  system: {
+    leaseReclaims: number
+    internalErrors: number
+  }
+}
+
+/** Aggregated observability summary over the requested window. */
+export type EngineObservabilitySummary = {
+  runs: EngineObservabilityBucket['runs']
+  effects: EngineObservabilityBucket['effects']
+  system: {
+    leaseReclaims: number
+    internalErrors: number
+    recentErrorCount: number
+  }
+}
+
+/** Recent engine error record captured for observability dashboards. */
+export type EngineObservabilityError = {
+  id: number
+  kind: 'run' | 'effect' | 'internal'
+  createdAt: number
+  processName: string | null
+  runId: string | null
+  effectKey: string | null
+  context: string | null
+  message: string
+}
+
+/** Query options for engine observability rollups. */
+export type EngineObservabilityQuery = {
+  from?: number
+  to?: number
+  bucketMs?: number
+  errorLimit?: number
+}
+
+/** Observability report returned by {@link Engine.getObservability}. */
+export type EngineObservabilityReport = {
+  from: number
+  to: number
+  bucketSizeMs: number
+  summary: EngineObservabilitySummary
+  buckets: EngineObservabilityBucket[]
+  recentErrors: EngineObservabilityError[]
+}
+
+/** Lightweight invalidation event streamed to dashboard clients over SSE. */
+export type EngineStreamEvent = {
+  kind: 'connected' | 'event'
+  at: number
+  topics: string[]
+  eventType?: EngineEvent['type']
+  runId?: string | null
+  correlationId?: string | null
+  processName?: string | null
+  eventName?: string | null
+  effectKey?: string | null
+  context?: string | null
 }
 
 /**

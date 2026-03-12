@@ -1,3 +1,6 @@
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { describe, it, expect, afterEach } from 'vitest'
 import { createEngine } from './index.js'
 import type { Engine, EngineEvent, EngineOptions } from './types.js'
@@ -27,6 +30,19 @@ function observabilityTests(label: string, storeOpts: EngineOptions) {
       expect(starts).toHaveLength(1)
       expect(completes).toHaveLength(1)
       expect(completes[0].type === 'run:complete' && completes[0].durationMs).toBeGreaterThanOrEqual(0)
+    })
+
+    it('supports direct event subscriptions for live invalidation', async () => {
+      setup()
+      const seen: EngineEvent[] = []
+      const unsubscribe = engine.subscribeEvents((event) => seen.push(event))
+      engine.register('proc', 'go', async () => ({ success: true }))
+      engine.emit('go', {})
+      await engine.drain()
+      unsubscribe()
+
+      expect(seen.some((event) => event.type === 'run:start')).toBe(true)
+      expect(seen.some((event) => event.type === 'run:complete')).toBe(true)
     })
 
     it('emits run:error with durationMs on handler failure', async () => {
@@ -282,8 +298,100 @@ function observabilityTests(label: string, storeOpts: EngineOptions) {
       expect(m1.queue.completed).toBe(0)
       expect(m2.queue.completed).toBe(1)
     })
+
+    it('getObservability returns bucketed counts, latency, and recent errors', async () => {
+      setup()
+      engine.register('ok', 'ok', async (ctx) => {
+        await ctx.effect('effect-ok', async () => 'done')
+        return { success: true }
+      })
+      engine.register('bad', 'bad', async () => ({ success: false, error: 'boom' }))
+
+      engine.emit('ok', {})
+      engine.emit('bad', {})
+      await engine.drain()
+
+      const report = engine.getObservability({ from: Date.now() - 60_000, to: Date.now() + 1_000, bucketMs: 5 * 60_000 })
+
+      expect(report.summary.runs.started).toBe(2)
+      expect(report.summary.runs.completed).toBe(1)
+      expect(report.summary.runs.failed).toBe(1)
+      expect(report.summary.effects.completed).toBe(1)
+      expect(report.summary.effects.failed).toBe(0)
+      expect(report.summary.runs.duration.count).toBe(2)
+      expect(report.summary.effects.duration.count).toBe(1)
+      expect(report.buckets.length).toBeGreaterThanOrEqual(1)
+      expect(report.recentErrors).toHaveLength(1)
+      expect(report.recentErrors[0].kind).toBe('run')
+      expect(report.recentErrors[0].message).toBe('boom')
+    })
+
+    it('getObservability captures effect and internal errors', async () => {
+      setup({
+        onRunStart: () => {
+          throw new Error('hook blew up')
+        },
+      })
+      engine.register('bad-effect', 'go', async (ctx) => {
+        await ctx.effect('explode', async () => {
+          throw new Error('effect boom')
+        })
+        return { success: true }
+      })
+
+      engine.emit('go', {})
+      await engine.drain()
+
+      const report = engine.getObservability({ from: Date.now() - 60_000, to: Date.now() + 1_000, bucketMs: 5 * 60_000 })
+      const kinds = new Set(report.recentErrors.map((error) => error.kind))
+
+      expect(report.summary.effects.failed).toBe(1)
+      expect(report.summary.system.internalErrors).toBeGreaterThanOrEqual(1)
+      expect(kinds.has('effect')).toBe(true)
+      expect(kinds.has('internal')).toBe(true)
+    })
   })
 }
 
 observabilityTests('memory', {})
 observabilityTests('sqlite', { store: { type: 'sqlite', path: ':memory:' } })
+
+describe('observability persistence (sqlite)', () => {
+  let tmpFile: string
+
+  afterEach(() => {
+    if (!tmpFile) return
+    try {
+      fs.unlinkSync(tmpFile)
+    } catch {}
+    try {
+      fs.unlinkSync(tmpFile + '-wal')
+    } catch {}
+    try {
+      fs.unlinkSync(tmpFile + '-shm')
+    } catch {}
+  })
+
+  it('persists rollups across engine restarts', async () => {
+    tmpFile = path.join(os.tmpdir(), `engine-observability-${Date.now()}-${Math.random().toString(36).slice(2)}.db`)
+
+    const engine1 = createEngine({ store: { type: 'sqlite', path: tmpFile } })
+    engine1.register('proc', 'go', async (ctx) => {
+      await ctx.effect('persisted', async () => 'done')
+      return { success: true }
+    })
+    engine1.emit('go', {})
+    await engine1.drain()
+    const before = engine1.getObservability()
+    await engine1.stop()
+
+    const engine2 = createEngine({ store: { type: 'sqlite', path: tmpFile } })
+    const after = engine2.getObservability()
+
+    expect(after.summary.runs.completed).toBe(before.summary.runs.completed)
+    expect(after.summary.effects.completed).toBe(before.summary.effects.completed)
+    expect(after.buckets.length).toBeGreaterThanOrEqual(1)
+
+    await engine2.stop()
+  })
+})

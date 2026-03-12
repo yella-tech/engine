@@ -10,6 +10,7 @@ export type { OverlayState, OverlayActions } from './components/RunOverlay'
 
 // Panels
 export { OverviewPanel } from './components/OverviewPanel'
+export { ObservabilitySummaryGrid } from './components/ObservabilitySummaryGrid'
 export { ProcessesPanel } from './components/ProcessesPanel'
 export { RunsPanel } from './components/RunsPanel'
 export { TracePanel } from './components/TracePanel'
@@ -28,12 +29,14 @@ export { Timeline } from './components/Timeline'
 
 // Hooks
 export { usePolling } from './hooks/usePolling'
+export { useEventStream } from './hooks/useEventStream'
 export { useEscapeKey } from './hooks/useEscapeKey'
 export { useHashRoute, navigate } from './hooks/useHashRoute'
 export type { RouteMatch } from './hooks/useHashRoute'
 
 // Utilities
 export { api } from './lib/api'
-export { shortId, formatUptime, formatJson, timeAgo, timeStr, stripEffectPrefix, runStatus, isDeferred } from './lib/format'
+export { rpc } from './lib/rpc'
+export { shortId, formatUptime, formatJson, timeAgo, timeStr, formatPercent, formatDurationMs, stripEffectPrefix, runStatus, isDeferred } from './lib/format'
 export { compressTimeline } from './lib/compress'
 export type { CompressedTimeline } from './lib/compress'

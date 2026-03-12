@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import Database from 'better-sqlite3'
+import { createSqliteEngineObservabilityStore } from './observability-store.js'
 import { isDeferredRun } from './status.js'
 import type { EffectRecord, EffectStore, HandlerResult, ProcessState, Run, RunStore, TimelineEntry } from './types.js'
 import { VALID_TRANSITIONS } from './types.js'
@@ -136,6 +137,69 @@ const migrations: ((db: Database.Database) => void)[] = [
   (db) => {
     db.exec(`
       CREATE INDEX idx_runs_state_started_at ON runs(state, started_at DESC);
+    `)
+  },
+  // Migration 8 → 9: engine observability rollups and recent errors
+  (db) => {
+    db.exec(`
+      CREATE TABLE engine_observability_rollups (
+        bucket_start_ms           INTEGER NOT NULL,
+        bucket_size_ms            INTEGER NOT NULL,
+        run_started_count         INTEGER NOT NULL DEFAULT 0,
+        run_completed_count       INTEGER NOT NULL DEFAULT 0,
+        run_failed_count          INTEGER NOT NULL DEFAULT 0,
+        run_retried_count         INTEGER NOT NULL DEFAULT 0,
+        run_dead_letter_count     INTEGER NOT NULL DEFAULT 0,
+        run_resumed_count         INTEGER NOT NULL DEFAULT 0,
+        effect_completed_count    INTEGER NOT NULL DEFAULT 0,
+        effect_failed_count       INTEGER NOT NULL DEFAULT 0,
+        effect_replayed_count     INTEGER NOT NULL DEFAULT 0,
+        lease_reclaim_count       INTEGER NOT NULL DEFAULT 0,
+        internal_error_count      INTEGER NOT NULL DEFAULT 0,
+        run_duration_sum_ms       INTEGER NOT NULL DEFAULT 0,
+        run_duration_count        INTEGER NOT NULL DEFAULT 0,
+        run_duration_min_ms       INTEGER,
+        run_duration_max_ms       INTEGER,
+        run_dur_le_10ms           INTEGER NOT NULL DEFAULT 0,
+        run_dur_le_50ms           INTEGER NOT NULL DEFAULT 0,
+        run_dur_le_100ms          INTEGER NOT NULL DEFAULT 0,
+        run_dur_le_250ms          INTEGER NOT NULL DEFAULT 0,
+        run_dur_le_500ms          INTEGER NOT NULL DEFAULT 0,
+        run_dur_le_1000ms         INTEGER NOT NULL DEFAULT 0,
+        run_dur_le_2500ms         INTEGER NOT NULL DEFAULT 0,
+        run_dur_le_5000ms         INTEGER NOT NULL DEFAULT 0,
+        run_dur_le_10000ms        INTEGER NOT NULL DEFAULT 0,
+        run_dur_gt_10000ms        INTEGER NOT NULL DEFAULT 0,
+        effect_duration_sum_ms    INTEGER NOT NULL DEFAULT 0,
+        effect_duration_count     INTEGER NOT NULL DEFAULT 0,
+        effect_duration_min_ms    INTEGER,
+        effect_duration_max_ms    INTEGER,
+        effect_dur_le_10ms        INTEGER NOT NULL DEFAULT 0,
+        effect_dur_le_50ms        INTEGER NOT NULL DEFAULT 0,
+        effect_dur_le_100ms       INTEGER NOT NULL DEFAULT 0,
+        effect_dur_le_250ms       INTEGER NOT NULL DEFAULT 0,
+        effect_dur_le_500ms       INTEGER NOT NULL DEFAULT 0,
+        effect_dur_le_1000ms      INTEGER NOT NULL DEFAULT 0,
+        effect_dur_le_2500ms      INTEGER NOT NULL DEFAULT 0,
+        effect_dur_le_5000ms      INTEGER NOT NULL DEFAULT 0,
+        effect_dur_le_10000ms     INTEGER NOT NULL DEFAULT 0,
+        effect_dur_gt_10000ms     INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (bucket_start_ms, bucket_size_ms)
+      );
+
+      CREATE TABLE engine_observability_errors (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind             TEXT NOT NULL CHECK(kind IN ('run','effect','internal')),
+        created_at_ms    INTEGER NOT NULL,
+        process_name     TEXT,
+        run_id           TEXT,
+        effect_key       TEXT,
+        context          TEXT,
+        message          TEXT NOT NULL
+      );
+
+      CREATE INDEX idx_engine_observability_rollups_bucket_start ON engine_observability_rollups(bucket_start_ms DESC);
+      CREATE INDEX idx_engine_observability_errors_created_at ON engine_observability_errors(created_at_ms DESC);
     `)
   },
 ]
@@ -610,17 +674,19 @@ function createSqliteEffectStore(db: Database.Database): EffectStore {
   return { getEffect, getEffects, markStarted, markCompleted, markFailed, deleteEffectsForRuns }
 }
 
-export function createSqliteStores(dbPath: string): { runStore: RunStore; effectStore: EffectStore; close: () => void } {
+export function createSqliteStores(dbPath: string): { runStore: RunStore; effectStore: EffectStore; observabilityStore: ReturnType<typeof createSqliteEngineObservabilityStore>; close: () => void } {
   const db = new Database(dbPath)
   db.pragma('journal_mode = WAL')
   applyMigrations(db)
 
   const runStore = createSqliteRunStoreFromDb(db)
   const effectStore = createSqliteEffectStore(db)
+  const observabilityStore = createSqliteEngineObservabilityStore(db)
 
   return {
     runStore,
     effectStore,
+    observabilityStore,
     close: () => db.close(),
   }
 }

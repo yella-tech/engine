@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import { createBus } from './bus.js'
 import { createDispatcher } from './dispatcher.js'
 import { createEffectStore } from './effect.js'
+import { createEngineObservabilityRecorder, createMemoryEngineObservabilityStore } from './observability-store.js'
 import { createRegistry } from './registry.js'
 import { createRunStore } from './run.js'
 import { createSqliteStores } from './run-sqlite.js'
@@ -15,6 +16,12 @@ import type {
   Engine,
   EngineEvent,
   EngineMetrics,
+  EngineObservabilityBucket,
+  EngineObservabilityError,
+  EngineObservabilityQuery,
+  EngineObservabilityReport,
+  EngineObservabilitySummary,
+  EngineStreamEvent,
   EngineOptions,
   Handler,
   HandlerContext,
@@ -36,6 +43,8 @@ import type {
 export type {
   DevServer,
   DevServerOptions,
+  DurationHistogram,
+  DurationStats,
   EffectFn,
   EffectRecord,
   EffectState,
@@ -43,6 +52,12 @@ export type {
   Engine,
   EngineEvent,
   EngineMetrics,
+  EngineObservabilityBucket,
+  EngineObservabilityError,
+  EngineObservabilityQuery,
+  EngineObservabilityReport,
+  EngineObservabilitySummary,
+  EngineStreamEvent,
   EngineOptions,
   Handler,
   HandlerContext,
@@ -69,21 +84,21 @@ export { registerRoutes } from './server/routes.js'
 export type { RoutableEngine } from './server/routes.js'
 export { serveDashboard, resolveEngineUiDir, createDevServer } from './server/index.js'
 
-function buildStores(opts: EngineOptions): { runStore: RunStore; effectStore: EffectStore; close?: () => void } {
+function buildStores(opts: EngineOptions): { runStore: RunStore; effectStore: EffectStore; observabilityStore: ReturnType<typeof createMemoryEngineObservabilityStore>; close?: () => void } {
   if (opts.store === 'memory') {
-    return { runStore: createRunStore(), effectStore: createEffectStore() }
+    return { runStore: createRunStore(), effectStore: createEffectStore(), observabilityStore: createMemoryEngineObservabilityStore() }
   }
   if (opts.store) {
     const stores = createSqliteStores(opts.store.path)
-    return { runStore: stores.runStore, effectStore: stores.effectStore, close: stores.close }
+    return { runStore: stores.runStore, effectStore: stores.effectStore, observabilityStore: stores.observabilityStore, close: stores.close }
   }
   // Env var fallback
   const dbPath = process.env.STATE_DB_PATH
   if (dbPath) {
     const stores = createSqliteStores(dbPath)
-    return { runStore: stores.runStore, effectStore: stores.effectStore, close: stores.close }
+    return { runStore: stores.runStore, effectStore: stores.effectStore, observabilityStore: stores.observabilityStore, close: stores.close }
   }
-  return { runStore: createRunStore(), effectStore: createEffectStore() }
+  return { runStore: createRunStore(), effectStore: createEffectStore(), observabilityStore: createMemoryEngineObservabilityStore() }
 }
 
 /**
@@ -146,6 +161,8 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   // ── Observability ──
 
   const totals = { retries: 0, deadLetters: 0, resumes: 0, leaseReclaims: 0, internalErrors: 0 }
+  let observability: ReturnType<typeof createEngineObservabilityRecorder> | null = null
+  const subscribers = new Set<(event: EngineEvent) => void>()
 
   /** Call onInternalError safely without re-emitting events. */
   function notifyInternalError(error: unknown, context: string): void {
@@ -160,12 +177,28 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   function reportInternalError(error: unknown, context: string): void {
     totals.internalErrors++
     notifyInternalError(error, context)
+    if (observability) {
+      try {
+        observability.record({ type: 'internal:error', error, context })
+      } catch (err) {
+        totals.internalErrors++
+        notifyInternalError(err, 'observability')
+      }
+    }
     if (opts.onEvent) {
       try {
         opts.onEvent({ type: 'internal:error', error, context })
       } catch (err) {
         totals.internalErrors++
         notifyInternalError(err, 'onEvent')
+      }
+    }
+    for (const listener of subscribers) {
+      try {
+        listener({ type: 'internal:error', error, context })
+      } catch (err) {
+        totals.internalErrors++
+        notifyInternalError(err, 'subscribeEvents')
       }
     }
   }
@@ -193,7 +226,16 @@ export function createEngine(opts: EngineOptions = {}): Engine {
         break
     }
 
-    // 2. Legacy hooks (safe, failures go to reportInternalError, not back to emitEvent)
+    // 2. Persisted observability (safe, failures become internal errors)
+    if (observability) {
+      try {
+        observability.record(event)
+      } catch (err) {
+        reportInternalError(err, 'observability')
+      }
+    }
+
+    // 3. Legacy hooks (safe, failures go to reportInternalError, not back to emitEvent)
     switch (event.type) {
       case 'run:start':
         safeCallHook(opts.onRunStart, [event.run], reportInternalError, 'onRunStart')
@@ -213,7 +255,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
         break
     }
 
-    // 3. Unified onEvent, NOT called recursively for its own failures
+    // 4. Unified onEvent, NOT called recursively for its own failures
     if (opts.onEvent) {
       try {
         opts.onEvent(event)
@@ -222,12 +264,25 @@ export function createEngine(opts: EngineOptions = {}): Engine {
         notifyInternalError(err, 'onEvent')
       }
     }
+
+    for (const listener of subscribers) {
+      try {
+        listener(event)
+      } catch (err) {
+        totals.internalErrors++
+        notifyInternalError(err, 'subscribeEvents')
+      }
+    }
   }
 
   // ── Core wiring ──
 
   const registry = createRegistry()
-  const { runStore, effectStore, close } = buildStores(opts)
+  const { runStore, effectStore, observabilityStore, close } = buildStores(opts)
+  observability = createEngineObservabilityRecorder({
+    store: observabilityStore,
+    lookupRun: (runId) => runStore.get(runId),
+  })
   const bus = createBus(registry, runStore, {
     maxChainDepth,
     maxPayloadBytes,
@@ -452,6 +507,8 @@ export function createEngine(opts: EngineOptions = {}): Engine {
         new Promise<never>((_, reject) => setTimeout(() => reject(new EngineError(ErrorCode.GRACEFUL_STOP_TIMEOUT, `graceful stop timed out after ${timeout}ms`)), timeout)),
       ])
     }
+    observability?.close()
+    observability = null
     close?.()
   }
 
@@ -543,6 +600,83 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     }
   }
 
+  function getObservability(query?: EngineObservabilityQuery): EngineObservabilityReport {
+    return observability?.getObservability(query) ?? {
+      from: query?.from ?? Date.now(),
+      to: query?.to ?? Date.now(),
+      bucketSizeMs: query?.bucketMs ?? 5 * 60_000,
+      summary: {
+        runs: {
+          started: 0,
+          completed: 0,
+          failed: 0,
+          retried: 0,
+          deadLetters: 0,
+          resumed: 0,
+          successRate: null,
+          duration: {
+            count: 0,
+            sumMs: 0,
+            minMs: null,
+            maxMs: null,
+            avgMs: null,
+            p50Ms: null,
+            p95Ms: null,
+            histogram: {
+              le10ms: 0,
+              le50ms: 0,
+              le100ms: 0,
+              le250ms: 0,
+              le500ms: 0,
+              le1000ms: 0,
+              le2500ms: 0,
+              le5000ms: 0,
+              le10000ms: 0,
+              gt10000ms: 0,
+            },
+          },
+        },
+        effects: {
+          completed: 0,
+          failed: 0,
+          replayed: 0,
+          successRate: null,
+          duration: {
+            count: 0,
+            sumMs: 0,
+            minMs: null,
+            maxMs: null,
+            avgMs: null,
+            p50Ms: null,
+            p95Ms: null,
+            histogram: {
+              le10ms: 0,
+              le50ms: 0,
+              le100ms: 0,
+              le250ms: 0,
+              le500ms: 0,
+              le1000ms: 0,
+              le2500ms: 0,
+              le5000ms: 0,
+              le10000ms: 0,
+              gt10000ms: 0,
+            },
+          },
+        },
+        system: { leaseReclaims: 0, internalErrors: 0, recentErrorCount: 0 },
+      },
+      buckets: [],
+      recentErrors: [],
+    }
+  }
+
+  function subscribeEvents(listener: (event: EngineEvent) => void): () => void {
+    subscribers.add(listener)
+    return () => {
+      subscribers.delete(listener)
+    }
+  }
+
   function getGraph(): EventGraph {
     const processes = registry.getAll()
     const nodes: EventGraphNode[] = processes.map((p) => ({
@@ -585,6 +719,8 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     countByState,
     getRunsPaginated,
     getMetrics,
+    getObservability,
+    subscribeEvents,
     retryRun,
     requeueDead,
     cancelRun,

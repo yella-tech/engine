@@ -2,7 +2,7 @@ import { useState, useCallback } from 'preact/hooks'
 import { ChainPicker } from './ChainPicker'
 import { navigate } from '../hooks/useHashRoute'
 import { usePolling } from '../hooks/usePolling'
-import { api } from '../lib/api'
+import { rpc } from '../lib/rpc'
 
 const NODE_W = 180
 const NODE_H = 56
@@ -171,8 +171,8 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
 
   const fetchData = useCallback(async () => {
     try {
-      const fetches: Promise<any>[] = [api('/graph'), api('/runs?limit=100&root=true')]
-      if (chainId) fetches.push(api('/runs/' + chainId + '/chain'))
+      const fetches: Promise<any>[] = [rpc.graph.get(), rpc.runs.list({ limit: 100, root: true })]
+      if (chainId) fetches.push(rpc.runs.chain(chainId))
       const [graphRes, runsRes, chainRes] = await Promise.all(fetches)
       setGraphData(graphRes)
       const runs = runsRes.runs || []

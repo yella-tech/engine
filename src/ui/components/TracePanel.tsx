@@ -3,7 +3,7 @@ import { TracePicker } from './TracePicker'
 import { GanttChart } from './GanttChart'
 import { usePolling } from '../hooks/usePolling'
 import { navigate } from '../hooks/useHashRoute'
-import { api } from '../lib/api'
+import { rpc } from '../lib/rpc'
 
 export function TracePanel({ chainId, onSpanClick }: { chainId?: string; onSpanClick: (id: string) => void }) {
   const [options, setOptions] = useState<{ id: string; label: string }[]>([])
@@ -15,7 +15,7 @@ export function TracePanel({ chainId, onSpanClick }: { chainId?: string; onSpanC
   const loadTrace = useCallback(async (id: string) => {
     setLoading(true)
     try {
-      const data = await api('/runs/' + id + '/trace')
+      const data = await rpc.runs.trace(id)
       setTraceData(data)
     } catch {
       setTraceData(null)
@@ -25,8 +25,8 @@ export function TracePanel({ chainId, onSpanClick }: { chainId?: string; onSpanC
 
   const fetchData = useCallback(async () => {
     try {
-      const fetches: Promise<any>[] = [api('/runs?limit=100&root=true')]
-      if (activeId) fetches.push(api('/runs/' + activeId + '/trace'))
+      const fetches: Promise<any>[] = [rpc.runs.list({ limit: 100, root: true })]
+      if (activeId) fetches.push(rpc.runs.trace(activeId))
       const [runsRes, traceRes] = await Promise.all(fetches)
       const runs = runsRes.runs || []
       setOptions(

@@ -6,7 +6,7 @@ import { cors } from 'hono/cors'
 import { serve } from '@hono/node-server'
 import type { DevServer } from '../types.js'
 import type { RoutableEngine } from './routes.js'
-import { registerRoutes } from './routes.js'
+import { createEngineApi } from './routes.js'
 
 function readFileOr(filePath: string, fallback: string): string {
   try {
@@ -119,8 +119,7 @@ function safeReadDir(dir: string): string[] {
 export function createDevServer(engine: RoutableEngine, opts?: { dashboardFallback?: boolean; uiDir?: string }): DevServer {
   const app = new Hono()
   app.use('*', cors())
-
-  registerRoutes(app, engine)
+  createEngineApi(engine, app)
   if (opts?.dashboardFallback !== false) {
     installDashboardFallback(app, opts?.uiDir ?? resolveEngineUiDir())
   }

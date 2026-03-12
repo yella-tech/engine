@@ -149,7 +149,7 @@ API and dashboard responses expose both the raw persisted `state` and a derived 
 
 ## Dev Dashboard
 
-One line enables a built-in dashboard with traces, graph views, and operator-focused run status.
+One line enables a built-in dashboard with overview trends, run inspection, traces, graph views, and manual event emission.
 
 ```typescript
 const engine = createEngine({ server: { port: 3400 } })
@@ -161,7 +161,15 @@ The dashboard is a Preact app served from built static assets. It includes:
 - **Processes**, registered process table with event graph visualization
 - **Runs**, filterable run browser with root-only toggle
 - **Trace**, Gantt timeline of execution chains with gap-collapsing
+- **Graph**, static workflow topology from declared `emits`
 - **Emit**, manual event emission for testing
+
+Live invalidation uses SSE plus bounded refresh intervals for heavier views, so the dashboard stays responsive without hammering every endpoint continuously.
+
+See the full dashboard guide and route reference:
+
+- [Dashboard](https://yella.tech/engine/docs/dashboard)
+- [Configuration](https://yella.tech/engine/docs/configuration)
 
 ## Examples
 
@@ -195,6 +203,11 @@ The Vite dev server runs on port 5173 with hot module replacement. Edit any comp
 ## Docs
 
 Full documentation, architecture guide, and API reference at [yella.tech](https://yella.tech).
+
+- [Getting Started](https://yella.tech/engine/docs/getting-started)
+- [Dashboard](https://yella.tech/engine/docs/dashboard)
+- [Configuration](https://yella.tech/engine/docs/configuration)
+- [API Reference](https://yella.tech/engine/docs/api-reference)
 
 ## License
 

@@ -36,7 +36,7 @@ export function RunOverlay({ overlay, actions }: { overlay: OverlayState; action
       if (!runId) return
       await actions.refreshOverlay(runId)
     },
-    1500,
+    15_000,
     open && chain.some((c: any) => c.state !== 'completed' && c.state !== 'errored'),
   )
 

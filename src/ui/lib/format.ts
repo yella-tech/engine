@@ -38,6 +38,20 @@ export function timeStr() {
   return new Date().toTimeString().slice(0, 8)
 }
 
+export function formatPercent(value: number | null | undefined, digits = 1) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '--'
+  return `${(value * 100).toFixed(digits)}%`
+}
+
+export function formatDurationMs(value: number | null | undefined) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '--'
+  if (value < 1000) return `${Math.round(value)}ms`
+  const seconds = value / 1000
+  if (seconds < 60) return `${seconds.toFixed(seconds >= 10 ? 1 : 2)}s`
+  const minutes = seconds / 60
+  return `${minutes.toFixed(minutes >= 10 ? 1 : 2)}m`
+}
+
 export function stripEffectPrefix(key: string) {
   if (key.startsWith('str:')) return key.slice(4)
   if (key.startsWith('arr:v1:')) {
