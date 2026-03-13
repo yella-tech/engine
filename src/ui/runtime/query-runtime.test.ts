@@ -29,9 +29,7 @@ function createManualRuntimeClock() {
       now += delayMs
 
       while (true) {
-        const due = [...tasks.entries()]
-          .filter(([, task]) => task.at <= now)
-          .sort((left, right) => left[1].at - right[1].at)
+        const due = [...tasks.entries()].filter(([, task]) => task.at <= now).sort((left, right) => left[1].at - right[1].at)
 
         if (due.length === 0) return
 

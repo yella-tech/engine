@@ -10,14 +10,7 @@ type HealthResult = Awaited<ReturnType<DashboardRuntimeRpc['health']['get']>>
 type OverviewResult = Awaited<ReturnType<DashboardRuntimeRpc['overview']['get']>>
 type OverlayResult = Awaited<ReturnType<DashboardRuntimeRpc['runs']['overlay']>>
 
-export function useRunsListQuery(params: {
-  limit: number
-  offset?: number
-  status?: string
-  root?: boolean
-  pollMs?: number
-  enabled?: boolean
-}) {
+export function useRunsListQuery(params: { limit: number; offset?: number; status?: string; root?: boolean; pollMs?: number; enabled?: boolean }) {
   const { rpc } = useDashboardRuntimeDeps()
   const fetcher = useCallback(
     () =>

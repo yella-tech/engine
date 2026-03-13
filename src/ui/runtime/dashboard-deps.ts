@@ -19,7 +19,7 @@ export interface DashboardTimers {
 }
 
 export interface DashboardLiveSource<TEvent = unknown> {
-  subscribe: (listener: (event: TEvent) => void) => (() => void)
+  subscribe: (listener: (event: TEvent) => void) => () => void
 }
 
 export interface DashboardRuntimeDeps {

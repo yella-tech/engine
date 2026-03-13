@@ -1,12 +1,5 @@
 import { getRunStatus, withRunStatus, withRunStatuses } from '../status.js'
-import type {
-  EngineEvent,
-  EngineMetrics,
-  EngineStreamEvent,
-  ProcessState,
-  Run,
-  RunStatus,
-} from '../types.js'
+import type { EngineEvent, EngineMetrics, EngineStreamEvent, ProcessState, Run, RunStatus } from '../types.js'
 import { buildTraceGaps, buildTraceTree, flattenTrace } from './trace.js'
 import type { RoutableEngine } from './contract.js'
 
@@ -128,10 +121,7 @@ function buildHealthPayload(engine: RoutableEngine, uptime: number): HealthPaylo
   }
 }
 
-export function createEngineRouteServices(
-  engine: RoutableEngine,
-  clock: EngineServiceClock = { now: () => Date.now(), uptime: () => process.uptime() },
-) {
+export function createEngineRouteServices(engine: RoutableEngine, clock: EngineServiceClock = { now: () => Date.now(), uptime: () => process.uptime() }) {
   return {
     live: {
       stream(signal: AbortSignal) {
@@ -202,9 +192,7 @@ export function createEngineRouteServices(
       overview(opts: { limit: number; root: boolean; observabilityWindowMs?: number }) {
         const now = clock.now()
         const recentRuns = engine.getRunsPaginated(null, opts.limit, 0, { root: opts.root })
-        const observability = opts.observabilityWindowMs
-          ? engine.getObservability({ from: Math.max(0, now - opts.observabilityWindowMs), to: now })
-          : null
+        const observability = opts.observabilityWindowMs ? engine.getObservability({ from: Math.max(0, now - opts.observabilityWindowMs), to: now }) : null
 
         return {
           health: buildHealthPayload(engine, clock.uptime()),
@@ -251,7 +239,10 @@ export function createEngineRouteServices(
         const rootRun = resolveRootRun(engine, run)
         const chain = withRunStatuses(sortChainRuns(engine.getChain(rootRun.id)))
         const selectedRun = chain.find((entry) => entry.id === selectedId) ?? chain.find((entry) => entry.id === run.id) ?? withRunStatus(run)
-        const selectedStepIdx = Math.max(0, chain.findIndex((entry) => entry.id === selectedRun.id))
+        const selectedStepIdx = Math.max(
+          0,
+          chain.findIndex((entry) => entry.id === selectedRun.id),
+        )
 
         return {
           run: withRunStatus(run),
