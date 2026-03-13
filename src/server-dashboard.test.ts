@@ -38,5 +38,9 @@ describe('dashboard serving', () => {
     const html = await res.text()
     expect(html).toContain('YELLA')
     expect(html).toContain('Dashboard bundle not found')
+
+    const css = await app.request('http://local/style.css')
+    expect(css.status).toBe(200)
+    expect(await css.text()).toContain('--black')
   })
 })

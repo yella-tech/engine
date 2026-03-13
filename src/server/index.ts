@@ -21,7 +21,8 @@ const fallbackHtml = `<!doctype html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>YELLA Dashboard</title>
+    <title>yella // dashboard unavailable</title>
+    <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <div class="wrap">
@@ -55,6 +56,15 @@ function buildDashboardBundle(uiDir: string): { indexHtml: string; assets: Map<s
   const publicDir = path.join(__dirname, 'public')
   const indexHtml = readFileOr(path.join(uiDir, 'index.html'), fallbackHtml)
   const assets = new Map<string, DashboardAsset>()
+
+  const fallbackCssPath = path.join(publicDir, 'brutalist.css')
+  const fallbackCss = readFileOr(fallbackCssPath, '')
+  if (fallbackCss) {
+    assets.set('/style.css', {
+      content: fallbackCss,
+      contentType: 'text/css',
+    })
+  }
 
   const uiFiles = safeReadDir(uiDir)
   for (const file of uiFiles) {
