@@ -1,8 +1,7 @@
-import { useState, useCallback, useEffect } from 'preact/hooks'
+import { useMemo } from 'preact/hooks'
 import { ChainPicker } from './ChainPicker'
 import { navigate } from '../hooks/useHashRoute'
-import { usePolling } from '../hooks/usePolling'
-import { rpc } from '../lib/rpc'
+import { useChainRunsQuery, useGraphQuery, useRootRunsQuery } from '../runtime/dashboard-queries'
 
 const NODE_W = 180
 const NODE_H = 56
@@ -27,7 +26,6 @@ interface ExecutedNode {
   runId: string
   state: string
   status: string
-  duration?: number
 }
 
 interface Pos {
@@ -164,64 +162,25 @@ export interface GraphPanelProps {
 }
 
 export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
-  const [graphData, setGraphData] = useState<{ nodes: GraphNode[]; edges: GraphEdge[] } | null>(null)
-  const [chainRuns, setChainRuns] = useState<any[] | null>(null)
-  const [chainOptions, setChainOptions] = useState<{ id: string; label: string }[]>([])
-  const [loadingStatic, setLoadingStatic] = useState(true)
-  const [loadingChain, setLoadingChain] = useState(false)
-
-  const fetchStaticData = useCallback(async () => {
-    try {
-      setLoadingStatic(true)
-      const [graphRes, runsRes] = await Promise.all([rpc.graph.get(), rpc.runs.list({ limit: 100, root: true })])
-      setGraphData(graphRes)
-      const runs = runsRes.runs || []
-      setChainOptions(
-        runs
-          .filter((r: any) => r.childRunIds && r.childRunIds.length > 0)
-          .map((r: any) => {
-            const when = new Date(r.startedAt).toLocaleTimeString()
-            return { id: r.id, label: `${r.processName} / ${r.eventName} \u25B8 chain \u2014 ${when}` }
-          }),
-      )
-    } catch {}
-    finally {
-      setLoadingStatic(false)
-    }
-  }, [])
-
-  const fetchChainRuns = useCallback(async (id: string) => {
-    try {
-      setLoadingChain(true)
-      const chainRes = await rpc.runs.chain(id)
-      setChainRuns((chainRes.runs || []).sort((a: any, b: any) => (a.depth ?? 0) - (b.depth ?? 0) || a.startedAt - b.startedAt))
-    } catch {
-      setChainRuns(null)
-    } finally {
-      setLoadingChain(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void fetchStaticData()
-  }, [fetchStaticData])
-
-  useEffect(() => {
-    if (!chainId) {
-      setChainRuns(null)
-      setLoadingChain(false)
-      return
-    }
-    void fetchChainRuns(chainId)
-  }, [chainId, fetchChainRuns])
-
-  usePolling(() => {
-    if (chainId) {
-      void fetchChainRuns(chainId)
-    }
-  }, 10_000, !!chainId, { immediate: false })
-
-  const loading = loadingStatic || loadingChain
+  const graphQuery = useGraphQuery()
+  const chainOptionsQuery = useRootRunsQuery(100)
+  const chainRunsQuery = useChainRunsQuery(chainId)
+  const graphData = graphQuery.data ?? null
+  const chainRuns = useMemo(
+    () => (chainRunsQuery.data?.runs || []).sort((a: any, b: any) => (a.depth ?? 0) - (b.depth ?? 0) || a.startedAt - b.startedAt),
+    [chainRunsQuery.data],
+  )
+  const chainOptions = useMemo(
+    () =>
+      (chainOptionsQuery.data?.runs || [])
+        .filter((r: any) => r.childRunIds && r.childRunIds.length > 0)
+        .map((r: any) => {
+          const when = new Date(r.startedAt).toLocaleTimeString()
+          return { id: r.id, label: `${r.processName} / ${r.eventName} \u25B8 chain \u2014 ${when}` }
+        }),
+    [chainOptionsQuery.data],
+  )
+  const loading = (graphQuery.isFetching && !graphQuery.data) || (chainOptionsQuery.isFetching && !chainOptionsQuery.data) || (!!chainId && chainRunsQuery.isFetching && !chainRunsQuery.data)
 
   if (loading) return <div class="empty">Loading graph...</div>
 
@@ -237,7 +196,7 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
   let mergedNodes: GraphNode[]
   let mergedEdges: GraphEdge[]
 
-  if (chainRuns && chainRuns.length > 0) {
+  if (chainRuns.length > 0) {
     const byId = new Map<string, any>()
     for (const r of chainRuns) {
       byId.set(r.id, r)
@@ -246,7 +205,6 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
         runId: r.id,
         state: r.state,
         status: r.status || r.state,
-        duration: r.duration,
       })
     }
     // Build executed edges
@@ -306,8 +264,8 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
     mergedEdges = [...edges]
   }
 
-  const hasStaticGraph = !chainRuns && mergedEdges.length > 0
-  const showGraph = mergedNodes.length > 0 && (chainRuns || hasStaticGraph)
+  const hasStaticGraph = chainRuns.length === 0 && mergedEdges.length > 0
+  const showGraph = mergedNodes.length > 0 && (chainRuns.length > 0 || hasStaticGraph)
 
   const picker = (
     <ChainPicker
@@ -324,7 +282,7 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
     return (
       <div>
         {picker}
-        {!chainRuns && mergedNodes.length > 0 && (
+        {chainRuns.length === 0 && mergedNodes.length > 0 && (
           <div class="graph-empty">
             {mergedNodes.length} processes registered but no relationships declared. Add <code>emits</code> to your process registrations to see the dependency graph, or select a chain above.
           </div>
@@ -405,7 +363,6 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
                 {isExecuted ? (
                   <text x={pos.x + NODE_W / 2 + (tone ? 4 : 0)} y={pos.y + 40} text-anchor="middle" font-size="9" fill={tone ? tone.text : 'var(--black)'} font-family="var(--font)">
                     {graphStatusLabel(exec!.status)}
-                    {exec!.duration != null ? ` · ${fmtDuration(exec!.duration)}` : ''}
                   </text>
                 ) : (
                   <text x={pos.x + NODE_W / 2} y={pos.y + 40} text-anchor="middle" font-size="9" fill="#999" font-family="var(--font)">

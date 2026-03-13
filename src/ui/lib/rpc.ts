@@ -1,7 +1,21 @@
-import { hc } from 'hono/client'
-import type { EngineApi } from '../../server/routes.js'
+import type { createEngineRouteServices } from '../../server/engine-services.js'
 
-const client = hc<EngineApi>('/')
+type EngineRouteServices = ReturnType<typeof createEngineRouteServices>
+
+type HealthResponse = ReturnType<EngineRouteServices['reads']['health']>
+type OverviewResponse = ReturnType<EngineRouteServices['reads']['overview']>
+type ObservabilityResponse = ReturnType<EngineRouteServices['reads']['observability']>
+type RunsListResponse = ReturnType<EngineRouteServices['reads']['runs']>
+type RunResponse = NonNullable<ReturnType<EngineRouteServices['reads']['run']>>
+type RunChainResponse = NonNullable<ReturnType<EngineRouteServices['reads']['chain']>>
+type RunOverlayResponse = NonNullable<ReturnType<EngineRouteServices['reads']['overlay']>>
+type RunTraceResponse = NonNullable<ReturnType<EngineRouteServices['reads']['trace']>>
+type RunEffectsResponse = NonNullable<ReturnType<EngineRouteServices['reads']['effects']>>
+type GraphResponse = ReturnType<EngineRouteServices['reads']['graph']>
+type RetryResponse = ReturnType<EngineRouteServices['commands']['retry']>
+type RequeueResponse = ReturnType<EngineRouteServices['commands']['requeue']>
+type ResumeResponse = ReturnType<EngineRouteServices['commands']['resume']>
+type EmitResponse = ReturnType<EngineRouteServices['commands']['emit']>
 
 async function unwrapJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -18,40 +32,55 @@ async function unwrapJson<T>(response: Response): Promise<T> {
 }
 
 function stringQuery(values: Record<string, string | number | boolean | undefined>) {
-  const query: Record<string, string> = {}
+  const query = new URLSearchParams()
   for (const [key, value] of Object.entries(values)) {
     if (value === undefined) continue
-    query[key] = String(value)
+    query.set(key, String(value))
   }
-  return query
+  const search = query.toString()
+  return search ? `?${search}` : ''
+}
+
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  return unwrapJson<T>(await fetch(path, init))
 }
 
 export const rpc = {
   health: {
-    get: async () => unwrapJson(await client.health.$get()),
+    get: async (): Promise<HealthResponse> => requestJson('/health'),
   },
   overview: {
-    get: async (query: { limit?: number; root?: boolean; observabilityWindow?: string }) => unwrapJson(await client.overview.$get({ query: stringQuery(query) })),
+    get: async (query: { limit?: number; root?: boolean; observabilityWindow?: string }): Promise<OverviewResponse> => requestJson(`/overview${stringQuery(query)}`),
   },
   observability: {
-    get: async (query: { from?: number; to?: number; window?: string; bucketMs?: number }) => unwrapJson(await client.observability.$get({ query: stringQuery(query) })),
+    get: async (query: { from?: number; to?: number; window?: string; bucketMs?: number }): Promise<ObservabilityResponse> => requestJson(`/observability${stringQuery(query)}`),
   },
   runs: {
-    list: async (query: { limit?: number; offset?: number; state?: string; status?: string; root?: boolean }) => unwrapJson(await client.runs.$get({ query: stringQuery(query) })),
-    get: async (id: string) => unwrapJson(await client.runs[':id'].$get({ param: { id } })),
-    chain: async (id: string) => unwrapJson(await client.runs[':id'].chain.$get({ param: { id } })),
-    overlay: async (id: string, query?: { selectedId?: string }) => unwrapJson(await client.runs[':id'].overlay.$get({ param: { id }, query: stringQuery(query ?? {}) })),
-    trace: async (id: string) => unwrapJson(await client.runs[':id'].trace.$get({ param: { id } })),
-    effects: async (id: string) => unwrapJson(await client.runs[':id'].effects.$get({ param: { id } })),
-    retry: async (id: string) => unwrapJson(await client.runs[':id'].retry.$post({ param: { id } })),
-    requeue: async (id: string) => unwrapJson(await client.runs[':id'].requeue.$post({ param: { id } })),
-    resume: async (id: string, payload?: unknown) => unwrapJson(await client.runs[':id'].resume.$post({ param: { id }, json: payload === undefined ? {} : payload })),
+    list: async (query: { limit?: number; offset?: number; state?: string; status?: string; root?: boolean }): Promise<RunsListResponse> => requestJson(`/runs${stringQuery(query)}`),
+    get: async (id: string): Promise<RunResponse> => requestJson(`/runs/${id}`),
+    chain: async (id: string): Promise<RunChainResponse> => requestJson(`/runs/${id}/chain`),
+    overlay: async (id: string, query?: { selectedId?: string }): Promise<RunOverlayResponse> => requestJson(`/runs/${id}/overlay${stringQuery(query ?? {})}`),
+    trace: async (id: string): Promise<RunTraceResponse> => requestJson(`/runs/${id}/trace`),
+    effects: async (id: string): Promise<RunEffectsResponse> => requestJson(`/runs/${id}/effects`),
+    retry: async (id: string): Promise<RetryResponse> => requestJson(`/runs/${id}/retry`, { method: 'POST' }),
+    requeue: async (id: string): Promise<RequeueResponse> => requestJson(`/runs/${id}/requeue`, { method: 'POST' }),
+    resume: async (id: string, payload?: unknown): Promise<ResumeResponse> =>
+      requestJson(`/runs/${id}/resume`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload === undefined ? {} : payload),
+      }),
   },
   graph: {
-    get: async () => unwrapJson(await client.graph.$get()),
+    get: async (): Promise<GraphResponse> => requestJson('/graph'),
   },
   emit: {
-    post: async (json: { event: string; payload: unknown; idempotencyKey?: string }) => unwrapJson(await client.emit.$post({ json })),
+    post: async (json: { event: string; payload: unknown; idempotencyKey?: string }): Promise<EmitResponse> =>
+      requestJson('/emit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(json),
+      }),
   },
 }
 

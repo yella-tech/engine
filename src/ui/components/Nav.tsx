@@ -11,16 +11,17 @@ export interface TabDef {
   hidden?: boolean
 }
 
-export function Nav({
+export function NavView({
   brand,
   tabs,
+  activeTab,
   uptimeStartedAtMs,
 }: {
   brand: string
   tabs: TabDef[]
+  activeTab: string
   uptimeStartedAtMs: number | null
 }) {
-  const route = useHashRoute(tabs)
   const visibleTabs = tabs.filter((t) => !t.hidden)
   const [uptime, setUptime] = useState('--')
 
@@ -47,7 +48,7 @@ export function Nav({
       <ul class="nav-items">
         {visibleTabs.map((t) => (
           <li class="nav-item" key={t.id}>
-            <a class={`nav-link ${route.tab === t.id ? 'active' : ''}`} href={`#${t.path}`} title={t.id}>
+            <a class={`nav-link ${activeTab === t.id ? 'active' : ''}`} href={`#${t.path}`} title={t.id}>
               {t.icon}
               <span class="hide-mobile">{t.label}</span>
             </a>
@@ -62,6 +63,19 @@ export function Nav({
       </div>
     </nav>
   )
+}
+
+export function Nav({
+  brand,
+  tabs,
+  uptimeStartedAtMs,
+}: {
+  brand: string
+  tabs: TabDef[]
+  uptimeStartedAtMs: number | null
+}) {
+  const route = useHashRoute(tabs)
+  return <NavView brand={brand} tabs={tabs} activeTab={route.tab} uptimeStartedAtMs={uptimeStartedAtMs} />
 }
 
 // Standard icons

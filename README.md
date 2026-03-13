@@ -188,6 +188,8 @@ npm run load-test
 
 The dashboard components are exported as a library via `@yellatech/engine/ui` for use by packages that extend the engine (e.g. `@yellatech/conduit`). The `DashboardShell` accepts custom tabs and panels, so consumers can add their own views without forking the dashboard.
 
+For the operator UI migration plan and architecture reference, see [docs/operator-ui-architecture.md](docs/operator-ui-architecture.md).
+
 ### Developing the Dashboard
 
 ```bash

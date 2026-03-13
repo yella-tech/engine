@@ -85,6 +85,7 @@ export { createEffectStore } from './effect.js'
 export { createSqliteStores } from './run-sqlite.js'
 export { getRunStatus, isDeadLetterRun, isDeferredRun, withRunStatus, withRunStatuses } from './status.js'
 export { registerRoutes } from './server/routes.js'
+export { defaultBucketMsForWindow } from './server/engine-services.js'
 export type { RoutableEngine } from './server/routes.js'
 export { serveDashboard, resolveEngineUiDir, createDevServer } from './server/index.js'
 

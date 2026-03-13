@@ -22,12 +22,12 @@ describe('dashboard serving', () => {
     const html = await res.text()
     expect(html).toContain('yella')
 
-    const css = await server.app.request('http://local/brutalist.css')
+    const css = await server.app.request('http://local/style.css')
     expect(css.status).toBe(200)
     expect(await css.text()).toContain('--black')
   })
 
-  it('serveDashboard falls back to legacy public assets when the UI dir is missing', async () => {
+  it('serveDashboard falls back to the minimal branded shell when the UI dir is missing', async () => {
     const app = new Hono()
     const missingUiDir = path.join(process.cwd(), `missing-ui-${crypto.randomUUID()}`)
 
@@ -36,10 +36,7 @@ describe('dashboard serving', () => {
     const res = await app.request('http://local/')
     expect(res.status).toBe(200)
     const html = await res.text()
-    expect(html).toContain('yella')
-
-    const css = await app.request('http://local/brutalist.css')
-    expect(css.status).toBe(200)
-    expect(await css.text()).toContain('--black')
+    expect(html).toContain('YELLA')
+    expect(html).toContain('Dashboard bundle not found')
   })
 })

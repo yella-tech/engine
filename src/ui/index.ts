@@ -28,11 +28,17 @@ export { StepDetail } from './components/StepDetail'
 export { Timeline } from './components/Timeline'
 
 // Hooks
-export { usePolling } from './hooks/usePolling'
-export { useEventStream } from './hooks/useEventStream'
 export { useEscapeKey } from './hooks/useEscapeKey'
 export { useHashRoute, navigate, buildHashPath } from './hooks/useHashRoute'
 export type { RouteMatch } from './hooks/useHashRoute'
+export { useDashboardQuery, useDashboardRuntimeDeps } from './runtime/query-runtime'
+export type { DashboardQueryKey, DashboardQueryKeyPart, DashboardQueryOptions, DashboardQueryResult, DashboardQuerySnapshot } from './runtime/query-runtime'
+
+// Plugins
+export { createDashboardConfigFromPlugins } from './runtime/dashboard-plugin'
+export type { DashboardPanelRenderer, DashboardPlugin } from './runtime/dashboard-plugin'
+export { createEngineDashboardPlugin } from './plugins/engine-plugin'
+export type { EngineDashboardPluginOptions } from './plugins/engine-plugin'
 
 // Utilities
 export { api } from './lib/api'

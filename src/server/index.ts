@@ -5,7 +5,7 @@ import type { Context } from 'hono'
 import { cors } from 'hono/cors'
 import { serve } from '@hono/node-server'
 import type { DevServer } from '../types.js'
-import type { RoutableEngine } from './routes.js'
+import type { RoutableEngine } from './contract.js'
 import { createEngineApi } from './routes.js'
 
 function readFileOr(filePath: string, fallback: string): string {
@@ -16,7 +16,23 @@ function readFileOr(filePath: string, fallback: string): string {
   }
 }
 
-const fallbackHtml = '<html><body><p>Dashboard not found. Run <code>npm run build</code> to build UI.</p></body></html>'
+const fallbackHtml = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>YELLA Dashboard</title>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hero">
+        <div class="badge">YELLA</div>
+        <h1>Dashboard bundle not found</h1>
+        <p>Run <code>npm run build</code> to generate the dashboard assets.</p>
+      </header>
+    </div>
+  </body>
+</html>`
 
 const MIME_TYPES: Record<string, string> = {
   '.js': 'application/javascript',
@@ -37,7 +53,7 @@ export function resolveEngineUiDir(): string {
 
 function buildDashboardBundle(uiDir: string): { indexHtml: string; assets: Map<string, DashboardAsset> } {
   const publicDir = path.join(__dirname, 'public')
-  const indexHtml = readFileOr(path.join(uiDir, 'index.html'), readFileOr(path.join(publicDir, 'index.html'), fallbackHtml))
+  const indexHtml = readFileOr(path.join(uiDir, 'index.html'), fallbackHtml)
   const assets = new Map<string, DashboardAsset>()
 
   const uiFiles = safeReadDir(uiDir)
@@ -51,14 +67,6 @@ function buildDashboardBundle(uiDir: string): { indexHtml: string; assets: Map<s
         contentType: MIME_TYPES[ext] || 'application/octet-stream',
       })
     }
-  }
-
-  const legacyCss = readFileOr(path.join(publicDir, 'brutalist.css'), '')
-  if (legacyCss && !assets.has('/brutalist.css')) {
-    assets.set('/brutalist.css', {
-      content: legacyCss,
-      contentType: 'text/css',
-    })
   }
 
   return { indexHtml, assets }

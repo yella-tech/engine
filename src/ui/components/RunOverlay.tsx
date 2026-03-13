@@ -2,7 +2,6 @@ import { Badge } from './Badge'
 import { DetailRow } from './DetailRow'
 import { Timeline } from './Timeline'
 import { StepDetail } from './StepDetail'
-import { usePolling } from '../hooks/usePolling'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import { shortId, runStatus } from '../lib/format'
 
@@ -30,15 +29,6 @@ export interface OverlayActions {
 
 export function RunOverlay({ overlay, actions }: { overlay: OverlayState; actions: OverlayActions }) {
   const { open, runId, run, chain, selectedStepIdx, stepDetail } = overlay
-
-  usePolling(
-    async () => {
-      if (!runId) return
-      await actions.refreshOverlay(runId)
-    },
-    15_000,
-    open && chain.some((c: any) => c.state !== 'completed' && c.state !== 'errored'),
-  )
 
   useEscapeKey(() => {
     if (open) actions.closeOverlay()

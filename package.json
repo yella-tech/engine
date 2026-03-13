@@ -13,6 +13,7 @@
       "default": "./dist/server/index.js"
     },
     "./ui": {
+      "types": "./dist/ui/index.d.ts",
       "default": "./dist/ui/ui.js"
     }
   },
@@ -22,7 +23,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc && npm run build:ui",
+    "build": "tsc && npm run build:ui && tsc -p tsconfig.ui.json",
     "build:ui": "vite build --config src/ui/vite.config.ts && cp src/ui/production.html dist/ui/index.html",
     "dev:ui": "vite dev --config src/ui/vite.config.ts",
     "postbuild:legacy": "cp -r src/server/public dist/server/public",
@@ -55,10 +56,13 @@
   "type": "commonjs",
   "devDependencies": {
     "@preact/preset-vite": "^2.9.4",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/preact": "^3.2.4",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.3.3",
     "@vitest/coverage-v8": "^4.0.18",
     "@vitest/ui": "^4.0.18",
+    "jsdom": "^28.1.0",
     "preact": "^10.25.4",
     "prettier": "^3.8.1",
     "tsx": "^4.21.0",

@@ -1,5 +1,3 @@
-import { useEffect, useRef } from 'preact/hooks'
-
 type SharedEventListener = (message: string) => void
 
 type SharedEventSource = {
@@ -35,23 +33,14 @@ function subscribe(url: string, listener: SharedEventListener): () => void {
   }
 }
 
-export function useEventStream<T = unknown>(url: string, onEvent: (event: T) => void, enabled: boolean) {
-  const saved = useRef(onEvent)
+export function subscribeToJsonEventStream<T = unknown>(url: string, listener: (event: T) => void): () => void {
+  if (typeof EventSource === 'undefined') return () => {}
 
-  useEffect(() => {
-    saved.current = onEvent
-  }, [onEvent])
-
-  useEffect(() => {
-    if (!enabled) return
-    if (typeof EventSource === 'undefined') return
-
-    return subscribe(url, (message) => {
-      try {
-        saved.current(JSON.parse(message) as T)
-      } catch {
-        /* ignore malformed events */
-      }
-    })
-  }, [url, enabled])
+  return subscribe(url, (message) => {
+    try {
+      listener(JSON.parse(message) as T)
+    } catch {
+      /* ignore malformed events */
+    }
+  })
 }

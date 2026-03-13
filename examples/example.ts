@@ -3,13 +3,16 @@ import { createEngine } from '../src/index.js'
 
 // Clean up any previous run
 const dbPath = '_db/runs.db'
+const port = Number(process.env.ENGINE_EXAMPLE_PORT ?? '0')
 fs.mkdirSync('_db', { recursive: true })
-if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath)
+for (const path of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {
+  if (fs.existsSync(path)) fs.unlinkSync(path)
+}
 
 const engine = createEngine({
   store: { type: 'sqlite', path: dbPath },
   concurrency: 10,
-  server: { port: 3400 },
+  server: { port },
 })
 
 // Helper: random delay between min and max ms
