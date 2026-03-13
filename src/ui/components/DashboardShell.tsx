@@ -1,13 +1,13 @@
 import type { ComponentChildren } from 'preact'
-import { useState, useCallback, useRef } from 'preact/hooks'
+import { useState, useCallback, useEffect, useRef } from 'preact/hooks'
 import { Nav, type TabDef } from './Nav'
 import { Ticker, TickerMsg } from './Ticker'
 import { RunOverlay, type OverlayState, type OverlayActions } from './RunOverlay'
 import { Badge } from './Badge'
 import { usePolling } from '../hooks/usePolling'
 import { useEventStream } from '../hooks/useEventStream'
-import { useHashRoute, navigate } from '../hooks/useHashRoute'
-import { formatUptime, shortId, timeStr } from '../lib/format'
+import { useHashRoute, navigate, type RouteMatch } from '../hooks/useHashRoute'
+import { shortId, timeStr } from '../lib/format'
 import { rpc } from '../lib/rpc'
 import type { EmitState } from './EmitPanel'
 import type { EngineObservabilitySummary, EngineStreamEvent } from '../../types.js'
@@ -21,9 +21,9 @@ export interface DashboardConfig {
 }
 
 export interface DashboardContext {
-  route: { tab: string; params: Record<string, string> }
+  route: RouteMatch
   navigate: (path: string) => void
-  health: { uptime: string; queue: Record<string, number>; processes: any[] }
+  health: { queue: Record<string, number>; processes: any[] }
   observability: { summary: EngineObservabilitySummary | null }
   recentRuns: { runs: any[]; total: number }
   overlay: OverlayState
@@ -85,10 +85,9 @@ function tickerNodeForEvent(event: EngineStreamEvent): ComponentChildren | null 
 
 export function DashboardShell({ config }: { config: DashboardConfig }) {
   const route = useHashRoute(config.tabs)
-  const [health, setHealth] = useState<{ uptime: string; queue: Record<string, number>; processes: any[] }>({ uptime: '--', queue: {}, processes: [] })
+  const [health, setHealth] = useState<{ queue: Record<string, number>; processes: any[] }>({ queue: {}, processes: [] })
   const [observability, setObservability] = useState<{ summary: EngineObservabilitySummary | null }>({ summary: null })
   const [recentRuns, setRecentRuns] = useState<{ runs: any[]; total: number }>({ runs: [], total: 0 })
-  const [ticker, setTicker] = useState<ComponentChildren[]>([])
   const [overlay, setOverlay] = useState<OverlayState>({
     open: false,
     runId: null,
@@ -111,15 +110,15 @@ export function DashboardShell({ config }: { config: DashboardConfig }) {
   const overlayRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const healthFetchInFlightRef = useRef(false)
   const lastHealthRefreshAtRef = useRef(0)
+  const tickerPushRef = useRef<(message: ComponentChildren) => void>(() => {})
+  const [navStartedAtMs, setNavStartedAtMs] = useState<number | null>(null)
 
   const addTicker = useCallback((node: ComponentChildren) => {
-    setTicker((prev) => {
-      const next = [
-        <TickerMsg time={timeStr()}>{node}</TickerMsg>,
-        ...prev,
-      ]
-      return next.slice(0, 20)
-    })
+    tickerPushRef.current(<TickerMsg time={timeStr()}>{node}</TickerMsg>)
+  }, [])
+
+  const bindTicker = useCallback((push: (message: ComponentChildren) => void) => {
+    tickerPushRef.current = push
   }, [])
 
   const fetchHealth = useCallback(async () => {
@@ -138,7 +137,8 @@ export function DashboardShell({ config }: { config: DashboardConfig }) {
         const runsData = overviewData.recentRuns || {}
         const observabilityData = overviewData.observability || null
 
-        setHealth({ uptime: formatUptime(healthData.uptime), queue: healthData.queue || {}, processes: healthData.processes || [] })
+        setHealth({ queue: healthData.queue || {}, processes: healthData.processes || [] })
+        setNavStartedAtMs(typeof healthData.uptime === 'number' && Number.isFinite(healthData.uptime) ? Date.now() - healthData.uptime * 1000 : null)
 
         const runs = runsData.runs || []
         setRecentRuns({ runs, total: runsData.total ?? runs.length })
@@ -148,10 +148,11 @@ export function DashboardShell({ config }: { config: DashboardConfig }) {
         }
       } else {
         const healthData = await rpc.health.get()
-        setHealth({ uptime: formatUptime(healthData.uptime), queue: healthData.queue || {}, processes: healthData.processes || [] })
+        setHealth({ queue: healthData.queue || {}, processes: healthData.processes || [] })
+        setNavStartedAtMs(typeof healthData.uptime === 'number' && Number.isFinite(healthData.uptime) ? Date.now() - healthData.uptime * 1000 : null)
       }
     } catch {
-      setHealth((prev) => ({ ...prev, uptime: 'offline' }))
+      setNavStartedAtMs(null)
     } finally {
       healthFetchInFlightRef.current = false
       lastHealthRefreshAtRef.current = Date.now()
@@ -160,7 +161,7 @@ export function DashboardShell({ config }: { config: DashboardConfig }) {
 
   const scheduleHealthRefresh = useCallback((delayMs = 250) => {
     if (healthRefreshTimerRef.current) return
-    const minIntervalMs = route.tab === 'overview' ? 15_000 : 5_000
+    const minIntervalMs = route.tab === 'overview' ? 5_000 : 5_000
     const sinceLast = Date.now() - lastHealthRefreshAtRef.current
     const effectiveDelay = Math.max(delayMs, sinceLast >= minIntervalMs ? 0 : minIntervalMs - sinceLast)
     healthRefreshTimerRef.current = setTimeout(() => {
@@ -169,8 +170,20 @@ export function DashboardShell({ config }: { config: DashboardConfig }) {
     }, effectiveDelay)
   }, [fetchHealth, route.tab])
 
-  const healthPollIntervalMs = route.tab === 'overview' ? 300_000 : 60_000
-  usePolling(fetchHealth, healthPollIntervalMs, true)
+  useEffect(() => () => {
+    if (healthRefreshTimerRef.current) {
+      clearTimeout(healthRefreshTimerRef.current)
+      healthRefreshTimerRef.current = null
+    }
+  }, [scheduleHealthRefresh])
+
+  useEffect(() => {
+    if (route.tab === 'overview' || route.tab === 'processes' || navStartedAtMs === null) {
+      void fetchHealth()
+    }
+  }, [fetchHealth, navStartedAtMs, route.tab])
+
+  usePolling(fetchHealth, 300_000, route.tab === 'overview', { immediate: false })
 
   const applyOverlayPayload = useCallback((runId: string, data: any) => {
     setOverlay((prev) => ({
@@ -304,26 +317,36 @@ export function DashboardShell({ config }: { config: DashboardConfig }) {
     }, delayMs)
   }, [overlay.runId, overlayActions])
 
+  useEffect(() => () => {
+    if (overlayRefreshTimerRef.current) {
+      clearTimeout(overlayRefreshTimerRef.current)
+      overlayRefreshTimerRef.current = null
+    }
+  }, [scheduleOverlayRefresh])
+
+  useEffect(() => {
+    if (overlay.open || overlay.runId) return
+    if (!overlayRefreshTimerRef.current) return
+    clearTimeout(overlayRefreshTimerRef.current)
+    overlayRefreshTimerRef.current = null
+  }, [overlay.open, overlay.runId])
+
   useEventStream<EngineStreamEvent>(
     '/events',
     (event) => {
       if (event.kind !== 'event') return
+
       const tickerNode = tickerNodeForEvent(event)
-      if (tickerNode) {
-        addTicker(tickerNode)
-      }
+      if (tickerNode) addTicker(tickerNode)
 
       if (route.tab === 'overview' && (event.topics.includes('health') || event.topics.includes('overview') || event.topics.includes('runs'))) {
         scheduleHealthRefresh()
       }
 
-      if (!overlay.open || !overlay.run) return
-      if (event.topics.includes('overlay') || event.topics.includes('trace')) {
+      if (overlay.open && overlay.run && (event.topics.includes('overlay') || event.topics.includes('trace'))) {
         const sameRun = !!event.runId && overlay.chain.some((step: any) => step.id === event.runId)
         const sameCorrelation = !!event.correlationId && event.correlationId === overlay.run.correlationId
-        if (sameRun || sameCorrelation) {
-          scheduleOverlayRefresh()
-        }
+        if (sameRun || sameCorrelation) scheduleOverlayRefresh()
       }
     },
     true,
@@ -346,11 +369,11 @@ export function DashboardShell({ config }: { config: DashboardConfig }) {
 
   return (
     <>
-      <Nav brand={config.brand} tabs={config.tabs} uptime={health.uptime} />
+      <Nav brand={config.brand} tabs={config.tabs} uptimeStartedAtMs={navStartedAtMs} />
 
       <div class="dashboard-main">{config.renderPanel(route.tab, ctx)}</div>
 
-      <Ticker messages={ticker} />
+      <Ticker bindPush={bindTicker} />
       <RunOverlay overlay={overlay} actions={overlayActions} />
     </>
   )

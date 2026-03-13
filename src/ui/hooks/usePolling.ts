@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'preact/hooks'
 
-export function usePolling(fn: () => void | Promise<void>, ms: number, enabled: boolean) {
+export function usePolling(fn: () => void | Promise<void>, ms: number, enabled: boolean, opts?: { immediate?: boolean }) {
   const saved = useRef(fn)
+  const immediate = opts?.immediate ?? true
   useEffect(() => {
     saved.current = fn
   }, [fn])
@@ -24,11 +25,17 @@ export function usePolling(fn: () => void | Promise<void>, ms: number, enabled: 
       }
     }
 
-    void tick()
+    if (immediate) {
+      void tick()
+    } else {
+      timer = setTimeout(() => {
+        void tick()
+      }, ms)
+    }
 
     return () => {
       cancelled = true
       if (timer) clearTimeout(timer)
     }
-  }, [ms, enabled])
+  }, [ms, enabled, immediate])
 }

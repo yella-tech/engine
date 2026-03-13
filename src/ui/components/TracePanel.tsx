@@ -9,25 +9,14 @@ export function TracePanel({ chainId, onSpanClick }: { chainId?: string; onSpanC
   const [options, setOptions] = useState<{ id: string; label: string }[]>([])
   const [selectedId, setSelectedId] = useState('')
   const [traceData, setTraceData] = useState<any>(null)
-  const [loading, setLoading] = useState(false)
+  const [loadingOptions, setLoadingOptions] = useState(false)
+  const [loadingTrace, setLoadingTrace] = useState(false)
   const activeId = chainId || selectedId
 
-  const loadTrace = useCallback(async (id: string) => {
-    setLoading(true)
+  const loadOptions = useCallback(async () => {
     try {
-      const data = await rpc.runs.trace(id)
-      setTraceData(data)
-    } catch {
-      setTraceData(null)
-    }
-    setLoading(false)
-  }, [])
-
-  const fetchData = useCallback(async () => {
-    try {
-      const fetches: Promise<any>[] = [rpc.runs.list({ limit: 100, root: true })]
-      if (activeId) fetches.push(rpc.runs.trace(activeId))
-      const [runsRes, traceRes] = await Promise.all(fetches)
+      setLoadingOptions(true)
+      const runsRes = await rpc.runs.list({ limit: 100, root: true })
       const runs = runsRes.runs || []
       setOptions(
         runs.map((r: any) => {
@@ -36,24 +25,43 @@ export function TracePanel({ chainId, onSpanClick }: { chainId?: string; onSpanC
           return { id: r.id, label: `${r.processName} / ${r.eventName}${hasChain ? ' \u25B8 chain' : ''} \u2014 ${when}` }
         }),
       )
-      if (activeId && traceRes) {
-        setTraceData(traceRes)
-      }
-    } catch {}
-    setLoading(false)
-  }, [activeId])
+    } catch {
+      setOptions([])
+    } finally {
+      setLoadingOptions(false)
+    }
+  }, [])
 
-  usePolling(fetchData, 3000, true)
+  const loadTrace = useCallback(async (id: string) => {
+    try {
+      setLoadingTrace(true)
+      const data = await rpc.runs.trace(id)
+      setTraceData(data)
+    } catch {}
+    finally {
+      setLoadingTrace(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadOptions()
+  }, [loadOptions])
 
   useEffect(() => {
     setSelectedId(chainId || '')
     if (!chainId) {
       setTraceData(null)
-      setLoading(false)
+      setLoadingTrace(false)
       return
     }
     void loadTrace(chainId)
   }, [chainId, loadTrace])
+
+  usePolling(() => {
+    if (activeId) {
+      void loadTrace(activeId)
+    }
+  }, 10_000, !!activeId, { immediate: false })
 
   const onSelect = useCallback((id: string) => {
     setSelectedId(id)
@@ -65,6 +73,8 @@ export function TracePanel({ chainId, onSpanClick }: { chainId?: string; onSpanC
     navigate(`/trace/${id}`)
     void loadTrace(id)
   }, [loadTrace])
+
+  const loading = loadingOptions || loadingTrace
 
   return (
     <div>

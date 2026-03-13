@@ -1,0 +1,705 @@
+
+> @yellatech/engine@0.13.9 load-test
+> tsx examples/load-test.ts realistic
+
+Dashboard: http://127.0.0.1:3400
+
+Yella Engine Load Test  [Realistic (API call simulation)]
+════════════════════════════════════════════════════════════════════════════════
+  Concurrency:   50
+  Duration:      300s across 6 phases
+  Seed events:   ~9,060 (each spawns 4-7 runs)
+  Expected runs: ~45,300 (mixed shallow/deep)
+  Handler time:  200-600ms (main), 20-80ms (validate)
+  Failure rate:  3%  |  Slow outliers: 5% (2000-5000ms)
+  Retry policy:  2 retries, exponential backoff (500ms, 1s, 2s)
+
+  Phases:
+    warm-up         2 events/s × 30s
+    steady         10 events/s × 60s
+    peak           30 events/s × 60s
+    surge          60 events/s × 60s
+    spike         100 events/s × 30s
+    cool-down       0 events/s × 60s
+════════════════════════════════════════════════════════════════════════════════
+
+     ts │ phase        │ queue                │    completed │   throughput │         p95 │      rss │ sq
+─────────────────────────────────────────────────────────────────────────────────────────────────────────
+     2s │ warm-up      │ q:     0 idle   1 run │ done:      13 │     6.5 run/s │ p95:  1000ms │ rss: 136MB │ sq: 0
+     4s │ warm-up      │ q:     0 idle   4 run │ done:      26 │     6.5 run/s │ p95:  1000ms │ rss: 136MB │ sq: 0
+     6s │ warm-up      │ q:     0 idle   4 run │ done:      50 │      12 run/s │ p95:  1000ms │ rss: 138MB │ sq: 0
+     8s │ warm-up      │ q:     0 idle   3 run │ done:      68 │       9 run/s │ p95:  1000ms │ rss: 139MB │ sq: 0
+    10s │ warm-up      │ q:     0 idle   2 run │ done:      82 │       7 run/s │ p95:  1000ms │ rss: 140MB │ sq: 0
+    12s │ warm-up      │ q:     0 idle   3 run │ done:      94 │       6 run/s │ p95:  1000ms │ rss: 140MB │ sq: 0
+    14s │ warm-up      │ q:     0 idle   6 run │ done:     109 │     7.5 run/s │ p95:  1000ms │ rss: 140MB │ sq: 0
+    16s │ warm-up      │ q:     0 idle   4 run │ done:     138 │    14.5 run/s │ p95:  1000ms │ rss: 140MB │ sq: 0
+    18s │ warm-up      │ q:     0 idle   5 run │ done:     157 │     9.5 run/s │ p95:  1000ms │ rss: 140MB │ sq: 0
+    20s │ warm-up      │ q:     1 idle   3 run │ done:     176 │     9.5 run/s │ p95:  1000ms │ rss: 140MB │ sq: 0
+    22s │ warm-up      │ q:     0 idle   3 run │ done:     194 │       9 run/s │ p95:  1000ms │ rss: 140MB │ sq: 0
+    24s │ warm-up      │ q:     0 idle   5 run │ done:     213 │     9.5 run/s │ p95:  1000ms │ rss: 140MB │ sq: 0
+    26s │ warm-up      │ q:     0 idle   4 run │ done:     235 │      11 run/s │ p95:  1000ms │ rss: 140MB │ sq: 0
+    28s │ warm-up      │ q:     0 idle   5 run │ done:     251 │       8 run/s │ p95:  1000ms │ rss: 140MB │ sq: 0
+    30s │ warm-up      │ q:     0 idle   6 run │ done:     260 │     4.5 run/s │ p95:  1000ms │ rss: 140MB │ sq: 0
+    32s │ steady       │ q:     0 idle  17 run │ done:     309 │    24.5 run/s │ p95:  1000ms │ rss: 140MB │ sq: 0
+    34s │ steady       │ q:     2 idle  18 run │ done:     397 │      44 run/s │ p95:  1000ms │ rss: 140MB │ sq: 0
+    36s │ steady       │ q:     0 idle  20 run │ done:     496 │    49.5 run/s │ p95:  1000ms │ rss: 140MB │ sq: 0
+    38s │ steady       │ q:     3 idle  21 run │ done:     570 │      37 run/s │ p95:  1000ms │ rss: 140MB │ sq: 0
+    40s │ steady       │ q:     1 idle  24 run │ done:     671 │    50.5 run/s │ p95:  1000ms │ rss: 140MB │ sq: 0
+    42s │ steady       │ q:     1 idle  19 run │ done:     782 │    55.5 run/s │ p95:  1000ms │ rss: 140MB │ sq: 0
+    44s │ steady       │ q:     1 idle  16 run │ done:     869 │    43.5 run/s │ p95:  1000ms │ rss: 141MB │ sq: 0
+    46s │ steady       │ q:     1 idle  19 run │ done:     946 │    38.5 run/s │ p95:  1000ms │ rss: 141MB │ sq: 0
+    48s │ steady       │ q:     0 idle  24 run │ done:   1,027 │    40.5 run/s │ p95:  1000ms │ rss: 142MB │ sq: 0
+    50s │ steady       │ q:     1 idle  21 run │ done:   1,117 │      45 run/s │ p95:  2500ms │ rss: 142MB │ sq: 0
+    52s │ steady       │ q:     2 idle  18 run │ done:   1,213 │      48 run/s │ p95:  2500ms │ rss: 142MB │ sq: 0
+    54s │ steady       │ q:     1 idle  14 run │ done:   1,313 │      50 run/s │ p95:  2500ms │ rss: 142MB │ sq: 0
+    56s │ steady       │ q:     1 idle  16 run │ done:   1,382 │    34.5 run/s │ p95:  2500ms │ rss: 142MB │ sq: 0
+    58s │ steady       │ q:     0 idle  19 run │ done:   1,473 │    45.5 run/s │ p95:  2500ms │ rss: 143MB │ sq: 0
+    60s │ steady       │ q:     0 idle  20 run │ done:   1,550 │    38.5 run/s │ p95:  2500ms │ rss: 143MB │ sq: 0
+    62s │ steady       │ q:     2 idle  20 run │ done:   1,636 │      43 run/s │ p95:  2500ms │ rss: 143MB │ sq: 0
+    64s │ steady       │ q:     0 idle  23 run │ done:   1,728 │      46 run/s │ p95:  2500ms │ rss: 143MB │ sq: 0
+    66s │ steady       │ q:     2 idle  21 run │ done:   1,825 │    48.5 run/s │ p95:  2500ms │ rss: 143MB │ sq: 0
+    68s │ steady       │ q:     1 idle  20 run │ done:   1,906 │    40.5 run/s │ p95:  2500ms │ rss: 144MB │ sq: 0
+    70s │ steady       │ q:     1 idle  22 run │ done:   1,998 │      46 run/s │ p95:  2500ms │ rss: 144MB │ sq: 0
+    72s │ steady       │ q:     0 idle  23 run │ done:   2,083 │    42.5 run/s │ p95:  2500ms │ rss: 144MB │ sq: 0
+    74s │ steady       │ q:     1 idle  27 run │ done:   2,177 │      47 run/s │ p95:  2500ms │ rss: 144MB │ sq: 0
+    76s │ steady       │ q:     1 idle  24 run │ done:   2,271 │      47 run/s │ p95:  2500ms │ rss: 144MB │ sq: 0
+    78s │ steady       │ q:     1 idle  27 run │ done:   2,377 │      53 run/s │ p95:  2500ms │ rss: 146MB │ sq: 0
+    80s │ steady       │ q:     0 idle  23 run │ done:   2,472 │    47.5 run/s │ p95:  2500ms │ rss: 148MB │ sq: 0
+    82s │ steady       │ q:     1 idle  21 run │ done:   2,571 │    49.5 run/s │ p95:  2500ms │ rss: 149MB │ sq: 0
+    84s │ steady       │ q:     0 idle  21 run │ done:   2,654 │    41.5 run/s │ p95:  5000ms │ rss: 149MB │ sq: 0
+    86s │ steady       │ q:     1 idle  23 run │ done:   2,737 │    41.5 run/s │ p95:  5000ms │ rss: 149MB │ sq: 0
+    88s │ steady       │ q:     0 idle  26 run │ done:   2,832 │    47.5 run/s │ p95:  5000ms │ rss: 149MB │ sq: 0
+    90s │ steady       │ q:     0 idle  19 run │ done:   2,935 │    51.5 run/s │ p95:  5000ms │ rss: 150MB │ sq: 0
+    92s │ peak         │ q:     0 idle  41 run │ done:   3,092 │    78.5 run/s │ p95:  5000ms │ rss: 150MB │ sq: 0
+    94s │ peak         │ q:    13 idle  50 run │ done:   3,298 │   103.1 run/s │ p95:  2500ms │ rss: 150MB │ sq: 0
+    96s │ peak         │ q:    28 idle  50 run │ done:   3,522 │     112 run/s │ p95:  2500ms │ rss: 151MB │ sq: 0
+    98s │ peak         │ q:    32 idle  50 run │ done:   3,786 │   131.9 run/s │ p95:  2500ms │ rss: 152MB │ sq: 0
+   100s │ peak         │ q:    26 idle  50 run │ done:   4,064 │     139 run/s │ p95:  2500ms │ rss: 152MB │ sq: 0
+   102s │ peak         │ q:    39 idle  50 run │ done:   4,300 │   117.6 run/s │ p95:  2500ms │ rss: 153MB │ sq: 0
+   104s │ peak         │ q:    58 idle  50 run │ done:   4,513 │   105.8 run/s │ p95:  2500ms │ rss: 153MB │ sq: 0
+   106s │ peak         │ q:    74 idle  50 run │ done:   4,764 │   125.2 run/s │ p95:  2500ms │ rss: 154MB │ sq: 0
+   108s │ peak         │ q:    79 idle  50 run │ done:   4,972 │   103.9 run/s │ p95:  2500ms │ rss: 155MB │ sq: 0
+   110s │ peak         │ q:   118 idle  50 run │ done:   5,185 │   106.5 run/s │ p95:  2500ms │ rss: 155MB │ sq: 0
+   112s │ peak         │ q:   126 idle  50 run │ done:   5,431 │   123.1 run/s │ p95:  2500ms │ rss: 157MB │ sq: 0
+   114s │ peak         │ q:   129 idle  50 run │ done:   5,675 │   121.9 run/s │ p95:  2500ms │ rss: 163MB │ sq: 0
+   116s │ peak         │ q:   143 idle  50 run │ done:   5,919 │     122 run/s │ p95:  2500ms │ rss: 170MB │ sq: 0
+   118s │ peak         │ q:   142 idle  50 run │ done:   6,170 │   125.5 run/s │ p95:  2500ms │ rss: 171MB │ sq: 0
+   120s │ peak         │ q:   154 idle  50 run │ done:   6,410 │     120 run/s │ p95:  2500ms │ rss: 171MB │ sq: 0
+   122s │ peak         │ q:   164 idle  50 run │ done:   6,621 │   105.5 run/s │ p95:  2500ms │ rss: 171MB │ sq: 0
+   124s │ peak         │ q:   172 idle  50 run │ done:   6,852 │   115.3 run/s │ p95:  2500ms │ rss: 171MB │ sq: 0
+   126s │ peak         │ q:   192 idle  50 run │ done:   7,106 │     127 run/s │ p95:  2500ms │ rss: 172MB │ sq: 0
+   128s │ peak         │ q:   213 idle  50 run │ done:   7,301 │    97.5 run/s │ p95:  2500ms │ rss: 172MB │ sq: 0
+   130s │ peak         │ q:   212 idle  50 run │ done:   7,544 │   121.5 run/s │ p95:  2500ms │ rss: 172MB │ sq: 0
+   132s │ peak         │ q:   245 idle  50 run │ done:   7,761 │   108.5 run/s │ p95:  2500ms │ rss: 173MB │ sq: 0
+   134s │ peak         │ q:   243 idle  50 run │ done:   7,998 │   118.5 run/s │ p95:  2500ms │ rss: 173MB │ sq: 0
+   136s │ peak         │ q:   249 idle  50 run │ done:   8,238 │     120 run/s │ p95:  2500ms │ rss: 174MB │ sq: 0
+   138s │ peak         │ q:   273 idle  50 run │ done:   8,485 │   123.3 run/s │ p95:  2500ms │ rss: 174MB │ sq: 0
+   140s │ peak         │ q:   279 idle  50 run │ done:   8,740 │   127.4 run/s │ p95:  2500ms │ rss: 175MB │ sq: 0
+   142s │ peak         │ q:   295 idle  50 run │ done:   8,959 │   109.4 run/s │ p95:  2500ms │ rss: 176MB │ sq: 0
+   144s │ peak         │ q:   314 idle  50 run │ done:   9,165 │   102.5 run/s │ p95:  2500ms │ rss: 177MB │ sq: 0
+   146s │ peak         │ q:   315 idle  50 run │ done:   9,396 │   115.5 run/s │ p95:  2500ms │ rss: 177MB │ sq: 0
+   148s │ peak         │ q:   336 idle  50 run │ done:   9,619 │     111 run/s │ p95:  2500ms │ rss: 178MB │ sq: 0
+   150s │ peak         │ q:   370 idle  50 run │ done:   9,821 │   100.9 run/s │ p95:  2500ms │ rss: 178MB │ sq: 0
+   152s │ surge        │ q:   436 idle  50 run │ done:  10,045 │   111.9 run/s │ p95:  2500ms │ rss: 178MB │ sq: 0
+   154s │ surge        │ q:   499 idle  50 run │ done:  10,286 │   120.5 run/s │ p95:  2500ms │ rss: 179MB │ sq: 0
+   156s │ surge        │ q:   585 idle  50 run │ done:  10,524 │   119.1 run/s │ p95:  2500ms │ rss: 180MB │ sq: 0
+   158s │ surge        │ q:   666 idle  50 run │ done:  10,738 │   106.9 run/s │ p95:  2500ms │ rss: 180MB │ sq: 0
+   160s │ surge        │ q:   778 idle  50 run │ done:  10,952 │     107 run/s │ p95:  2500ms │ rss: 181MB │ sq: 0
+   162s │ surge        │ q:   888 idle  50 run │ done:  11,176 │   112.1 run/s │ p95:  2500ms │ rss: 181MB │ sq: 0
+   164s │ surge        │ q:  1004 idle  50 run │ done:  11,367 │    95.5 run/s │ p95:  2500ms │ rss: 181MB │ sq: 0
+   166s │ surge        │ q:  1082 idle  50 run │ done:  11,598 │   115.5 run/s │ p95:  2500ms │ rss: 181MB │ sq: 0
+   168s │ surge        │ q:  1162 idle  50 run │ done:  11,826 │     114 run/s │ p95:  2500ms │ rss: 181MB │ sq: 0
+   170s │ surge        │ q:  1263 idle  50 run │ done:  12,016 │      95 run/s │ p95:  2500ms │ rss: 181MB │ sq: 0
+   172s │ surge        │ q:  1350 idle  50 run │ done:  12,227 │   105.5 run/s │ p95:  2500ms │ rss: 182MB │ sq: 0
+   174s │ surge        │ q:  1443 idle  50 run │ done:  12,479 │     126 run/s │ p95:  2500ms │ rss: 182MB │ sq: 0
+   176s │ surge        │ q:  1557 idle  50 run │ done:  12,699 │     110 run/s │ p95:  2500ms │ rss: 182MB │ sq: 0
+   178s │ surge        │ q:  1654 idle  50 run │ done:  12,899 │   100.1 run/s │ p95:  2500ms │ rss: 182MB │ sq: 0
+   180s │ surge        │ q:  1728 idle  50 run │ done:  13,125 │   112.9 run/s │ p95:  2500ms │ rss: 182MB │ sq: 0
+   182s │ surge        │ q:  1827 idle  50 run │ done:  13,327 │   101.1 run/s │ p95:  2500ms │ rss: 183MB │ sq: 0
+   184s │ surge        │ q:  1931 idle  50 run │ done:  13,554 │   113.5 run/s │ p95:  2500ms │ rss: 183MB │ sq: 0
+   186s │ surge        │ q:  2023 idle  50 run │ done:  13,813 │   129.5 run/s │ p95:  2500ms │ rss: 183MB │ sq: 0
+   188s │ surge        │ q:  2123 idle  50 run │ done:  14,035 │     111 run/s │ p95:  2500ms │ rss: 184MB │ sq: 0
+   190s │ surge        │ q:  2220 idle  50 run │ done:  14,242 │   103.5 run/s │ p95:  2500ms │ rss: 191MB │ sq: 0
+   192s │ surge        │ q:  2328 idle  50 run │ done:  14,487 │   122.4 run/s │ p95:  2500ms │ rss: 197MB │ sq: 0
+   194s │ surge        │ q:  2434 idle  50 run │ done:  14,708 │   110.5 run/s │ p95:  2500ms │ rss: 206MB │ sq: 0
+   196s │ surge        │ q:  2538 idle  50 run │ done:  14,954 │   122.9 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   198s │ surge        │ q:  2631 idle  50 run │ done:  15,232 │   138.3 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   200s │ surge        │ q:  2735 idle  50 run │ done:  15,453 │   110.4 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   202s │ surge        │ q:  2833 idle  50 run │ done:  15,676 │   111.4 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   204s │ surge        │ q:  2936 idle  50 run │ done:  15,895 │   109.5 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   206s │ surge        │ q:  2999 idle  50 run │ done:  16,137 │   120.9 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   208s │ surge        │ q:  3081 idle  50 run │ done:  16,355 │   109.1 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   210s │ surge        │ q:  3181 idle  50 run │ done:  16,550 │    97.5 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   212s │ spike        │ q:  3339 idle  50 run │ done:  16,787 │     118 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   214s │ spike        │ q:  3465 idle  50 run │ done:  17,067 │   139.6 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   216s │ spike        │ q:  3619 idle  50 run │ done:  17,296 │     114 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   218s │ spike        │ q:  3778 idle  50 run │ done:  17,489 │    96.4 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   220s │ spike        │ q:  3946 idle  50 run │ done:  17,721 │     116 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   222s │ spike        │ q:  4098 idle  50 run │ done:  17,977 │   127.9 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   224s │ spike        │ q:  4241 idle  50 run │ done:  18,271 │   147.1 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   226s │ spike        │ q:  4385 idle  50 run │ done:  18,560 │   144.4 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   228s │ spike        │ q:  4530 idle  50 run │ done:  18,810 │   123.8 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   230s │ spike        │ q:  4692 idle  50 run │ done:  19,060 │   124.9 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   232s │ spike        │ q:  4866 idle  50 run │ done:  19,319 │   129.6 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   234s │ spike        │ q:  5039 idle  50 run │ done:  19,586 │   133.5 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   236s │ spike        │ q:  5182 idle  50 run │ done:  19,882 │     148 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   238s │ spike        │ q:  5313 idle  50 run │ done:  20,197 │     157 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   240s │ spike        │ q:  5469 idle  50 run │ done:  20,428 │   115.2 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   242s │ cool-down    │ q:  5466 idle  50 run │ done:  20,634 │     103 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   244s │ cool-down    │ q:  5452 idle  50 run │ done:  20,865 │   115.5 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   246s │ cool-down    │ q:  5423 idle  50 run │ done:  21,131 │     133 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   248s │ cool-down    │ q:  5384 idle  50 run │ done:  21,384 │   126.4 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   250s │ cool-down    │ q:  5356 idle  50 run │ done:  21,655 │   135.5 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   252s │ cool-down    │ q:  5312 idle  50 run │ done:  21,971  err: 1 │   158.4 run/s │ p95:  2500ms │ rss: 210MB │ sq: 0
+   254s │ cool-down    │ q:  5283 idle  50 run │ done:  22,235  err: 1 │     132 run/s │ p95:  2500ms │ rss: 211MB │ sq: 0
+   256s │ cool-down    │ q:  5277 idle  50 run │ done:  22,501  err: 1 │     133 run/s │ p95:  2500ms │ rss: 211MB │ sq: 0
+   258s │ cool-down    │ q:  5248 idle  50 run │ done:  22,782  err: 1 │   140.4 run/s │ p95:  2500ms │ rss: 211MB │ sq: 0
+   260s │ cool-down    │ q:  5245 idle  50 run │ done:  23,045  err: 1 │   131.4 run/s │ p95:  2500ms │ rss: 211MB │ sq: 0
+   262s │ cool-down    │ q:  5219 idle  50 run │ done:  23,251  err: 1 │     103 run/s │ p95:  2500ms │ rss: 211MB │ sq: 0
+   264s │ cool-down    │ q:  5193 idle  50 run │ done:  23,494  err: 1 │   121.6 run/s │ p95:  2500ms │ rss: 211MB │ sq: 0
+   266s │ cool-down    │ q:  5176 idle  50 run │ done:  23,692  err: 1 │      99 run/s │ p95:  2500ms │ rss: 211MB │ sq: 0
+   268s │ cool-down    │ q:  5146 idle  50 run │ done:  23,914  err: 1 │   110.9 run/s │ p95:  2500ms │ rss: 211MB │ sq: 0
+   270s │ cool-down    │ q:  5123 idle  50 run │ done:  24,183  err: 1 │   134.1 run/s │ p95:  2500ms │ rss: 211MB │ sq: 0
+   272s │ cool-down    │ q:  5084 idle  50 run │ done:  24,480  err: 1 │   148.5 run/s │ p95:  2500ms │ rss: 211MB │ sq: 0
+   274s │ cool-down    │ q:  5079 idle  50 run │ done:  24,725  err: 1 │   122.5 run/s │ p95:  2500ms │ rss: 212MB │ sq: 0
+   276s │ cool-down    │ q:  5069 idle  50 run │ done:  24,974  err: 1 │   124.5 run/s │ p95:  2500ms │ rss: 212MB │ sq: 0
+   278s │ cool-down    │ q:  5083 idle  50 run │ done:  25,246  err: 1 │     136 run/s │ p95:  2500ms │ rss: 212MB │ sq: 0
+   280s │ cool-down    │ q:  5092 idle  50 run │ done:  25,455  err: 1 │   104.4 run/s │ p95:  2500ms │ rss: 212MB │ sq: 0
+   282s │ cool-down    │ q:  5080 idle  50 run │ done:  25,688  err: 1 │   116.5 run/s │ p95:  2500ms │ rss: 212MB │ sq: 0
+   284s │ cool-down    │ q:  5076 idle  50 run │ done:  25,944  err: 1 │   127.7 run/s │ p95:  2500ms │ rss: 212MB │ sq: 0
+   286s │ cool-down    │ q:  5076 idle  50 run │ done:  26,125  err: 1 │    90.5 run/s │ p95:  2500ms │ rss: 212MB │ sq: 0
+   288s │ cool-down    │ q:  5068 idle  50 run │ done:  26,317  err: 1 │      96 run/s │ p95:  2500ms │ rss: 213MB │ sq: 0
+   290s │ cool-down    │ q:  5106 idle  50 run │ done:  26,502  err: 1 │    92.5 run/s │ p95:  2500ms │ rss: 213MB │ sq: 0
+   292s │ cool-down    │ q:  5112 idle  50 run │ done:  26,719  err: 1 │   108.4 run/s │ p95:  2500ms │ rss: 162MB │ sq: 0
+   294s │ cool-down    │ q:  5122 idle  50 run │ done:  26,916  err: 1 │    98.5 run/s │ p95:  2500ms │ rss: 163MB │ sq: 0
+   296s │ cool-down    │ q:  5125 idle  50 run │ done:  27,072  err: 1 │    77.9 run/s │ p95:  2500ms │ rss: 166MB │ sq: 0
+   298s │ cool-down    │ q:  5132 idle  50 run │ done:  27,240  err: 1 │      84 run/s │ p95:  2500ms │ rss: 166MB │ sq: 0
+   300s │ cool-down    │ q:  5111 idle  50 run │ done:  27,440  err: 1 │     100 run/s │ p95:  2500ms │ rss: 166MB │ sq: 0
+─────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Draining remaining queue...
+   302s │ draining     │ q:  5106 idle  50 run │ done:  27,665  err: 1 │   112.5 run/s │ p95:  2500ms │ rss: 166MB │ sq: 0
+   304s │ draining     │ q:  5099 idle  50 run │ done:  27,847  err: 1 │      91 run/s │ p95:  2500ms │ rss: 167MB │ sq: 0
+   306s │ draining     │ q:  5079 idle  50 run │ done:  27,996  err: 1 │    74.5 run/s │ p95:  2500ms │ rss: 167MB │ sq: 0
+   308s │ draining     │ q:  5038 idle  50 run │ done:  28,191  err: 1 │    97.5 run/s │ p95:  2500ms │ rss: 170MB │ sq: 0
+   310s │ draining     │ q:  5036 idle  50 run │ done:  28,397  err: 1 │   102.9 run/s │ p95:  2500ms │ rss: 173MB │ sq: 0
+   312s │ draining     │ q:  5031 idle  50 run │ done:  28,608  err: 1 │   105.4 run/s │ p95:  2500ms │ rss: 173MB │ sq: 0
+   314s │ draining     │ q:  5034 idle  50 run │ done:  28,787  err: 1 │    89.5 run/s │ p95:  2500ms │ rss: 173MB │ sq: 0
+   316s │ draining     │ q:  5031 idle  50 run │ done:  28,981  err: 1 │      97 run/s │ p95:  2500ms │ rss: 173MB │ sq: 0
+   318s │ draining     │ q:  5023 idle  50 run │ done:  29,172  err: 1 │    95.5 run/s │ p95:  2500ms │ rss: 173MB │ sq: 0
+   320s │ draining     │ q:  5019 idle  50 run │ done:  29,362  err: 1 │    94.3 run/s │ p95:  2500ms │ rss: 173MB │ sq: 0
+   322s │ draining     │ q:  5006 idle  50 run │ done:  29,550  err: 1 │    93.5 run/s │ p95:  2500ms │ rss: 173MB │ sq: 0
+   324s │ draining     │ q:  4981 idle  50 run │ done:  29,752  err: 1 │   100.9 run/s │ p95:  2500ms │ rss: 173MB │ sq: 0
+   326s │ draining     │ q:  4964 idle  50 run │ done:  29,976  err: 1 │   111.9 run/s │ p95:  2500ms │ rss: 173MB │ sq: 0
+   328s │ draining     │ q:  4938 idle  50 run │ done:  30,154  err: 1 │      89 run/s │ p95:  2500ms │ rss: 173MB │ sq: 0
+   330s │ draining     │ q:  4877 idle  50 run │ done:  30,377  err: 1 │   111.5 run/s │ p95:  2500ms │ rss: 173MB │ sq: 0
+   332s │ draining     │ q:  4819 idle  50 run │ done:  30,578  err: 1 │   100.4 run/s │ p95:  2500ms │ rss: 173MB │ sq: 0
+   334s │ draining     │ q:  4794 idle  50 run │ done:  30,776  err: 1 │      99 run/s │ p95:  2500ms │ rss: 173MB │ sq: 0
+   336s │ draining     │ q:  4803 idle  50 run │ done:  30,995  err: 1 │     109 run/s │ p95:  2500ms │ rss: 173MB │ sq: 0
+   338s │ draining     │ q:  4651 idle  50 run │ done:  31,237  err: 1 │     121 run/s │ p95:  2500ms │ rss: 175MB │ sq: 0
+   340s │ draining     │ q:  4499 idle  50 run │ done:  31,442  err: 1 │   102.5 run/s │ p95:  2500ms │ rss: 177MB │ sq: 0
+   342s │ draining     │ q:  4295 idle  50 run │ done:  31,704  err: 1 │     131 run/s │ p95:  2500ms │ rss: 182MB │ sq: 0
+   344s │ draining     │ q:  4108 idle  50 run │ done:  31,943  err: 1 │   118.8 run/s │ p95:  2500ms │ rss: 186MB │ sq: 0
+   346s │ draining     │ q:  3917 idle  50 run │ done:  32,186  err: 1 │   121.5 run/s │ p95:  2500ms │ rss: 186MB │ sq: 0
+   348s │ draining     │ q:  3733 idle  50 run │ done:  32,416  err: 1 │   115.1 run/s │ p95:  2500ms │ rss: 186MB │ sq: 0
+   350s │ draining     │ q:  3540 idle  50 run │ done:  32,662  err: 1 │   122.9 run/s │ p95:  2500ms │ rss: 186MB │ sq: 0
+   352s │ draining     │ q:  3330 idle  50 run │ done:  32,925  err: 1 │   131.6 run/s │ p95:  2500ms │ rss: 186MB │ sq: 0
+   354s │ draining     │ q:  3128 idle  50 run │ done:  33,179  err: 1 │     127 run/s │ p95:  2500ms │ rss: 186MB │ sq: 0
+   356s │ draining     │ q:  2920 idle  50 run │ done:  33,447  err: 1 │   133.9 run/s │ p95:  2500ms │ rss: 186MB │ sq: 0
+   358s │ draining     │ q:  2755 idle  50 run │ done:  33,664  err: 1 │   108.5 run/s │ p95:  2500ms │ rss: 186MB │ sq: 0
+   360s │ draining     │ q:  2538 idle  50 run │ done:  33,921  err: 1 │   128.6 run/s │ p95:  2500ms │ rss: 186MB │ sq: 0
+   362s │ draining     │ q:  2331 idle  50 run │ done:  34,177  err: 1 │     128 run/s │ p95:  2500ms │ rss: 186MB │ sq: 0
+   364s │ draining     │ q:  2172 idle  50 run │ done:  34,380  err: 1 │   101.4 run/s │ p95:  2500ms │ rss: 186MB │ sq: 0
+   366s │ draining     │ q:  2009 idle  50 run │ done:  34,589  err: 1 │   104.5 run/s │ p95:  2500ms │ rss: 186MB │ sq: 0
+   368s │ draining     │ q:  1817 idle  50 run │ done:  34,827  err: 1 │   118.9 run/s │ p95:  2500ms │ rss: 186MB │ sq: 0
+   370s │ draining     │ q:  1655 idle  50 run │ done:  35,034  err: 1 │   103.5 run/s │ p95:  2500ms │ rss: 187MB │ sq: 0
+   372s │ draining     │ q:  1502 idle  50 run │ done:  35,235  err: 1 │   100.4 run/s │ p95:  2500ms │ rss: 187MB │ sq: 0
+   374s │ draining     │ q:  1317 idle  50 run │ done:  35,492  err: 1 │   128.6 run/s │ p95:  2500ms │ rss: 187MB │ sq: 0
+   376s │ draining     │ q:  1071 idle  50 run │ done:  35,797  err: 2 │   152.9 run/s │ p95:  2500ms │ rss: 187MB │ sq: 0
+   378s │ draining     │ q:   971 idle  50 run │ done:  36,027  err: 2 │   115.1 run/s │ p95:  2500ms │ rss: 187MB │ sq: 0
+   380s │ draining     │ q:   939 idle  50 run │ done:  36,234  err: 2 │   103.5 run/s │ p95:  2500ms │ rss: 187MB │ sq: 0
+   382s │ draining     │ q:   908 idle  50 run │ done:  36,431  err: 2 │    98.5 run/s │ p95:  2500ms │ rss: 187MB │ sq: 0
+   384s │ draining     │ q:   893 idle  50 run │ done:  36,578  err: 2 │    73.5 run/s │ p95:  2500ms │ rss: 187MB │ sq: 0
+   386s │ draining     │ q:   865 idle  50 run │ done:  36,762  err: 2 │      92 run/s │ p95:  2500ms │ rss: 187MB │ sq: 0
+   388s │ draining     │ q:   835 idle  50 run │ done:  36,951  err: 2 │    94.5 run/s │ p95:  2500ms │ rss: 187MB │ sq: 0
+   390s │ draining     │ q:   805 idle  50 run │ done:  37,126  err: 2 │    87.5 run/s │ p95:  2500ms │ rss: 187MB │ sq: 0
+   392s │ draining     │ q:   777 idle  50 run │ done:  37,302  err: 2 │      88 run/s │ p95:  2500ms │ rss: 187MB │ sq: 0
+   394s │ draining     │ q:   755 idle  50 run │ done:  37,440  err: 2 │      69 run/s │ p95:  2500ms │ rss: 187MB │ sq: 0
+   396s │ draining     │ q:   727 idle  50 run │ done:  37,596  err: 2 │      78 run/s │ p95:  2500ms │ rss: 188MB │ sq: 0
+   398s │ draining     │ q:   695 idle  50 run │ done:  37,747  err: 2 │    75.5 run/s │ p95:  2500ms │ rss: 188MB │ sq: 0
+   400s │ draining     │ q:   645 idle  50 run │ done:  37,969  err: 2 │     111 run/s │ p95:  2500ms │ rss: 188MB │ sq: 0
+   402s │ draining     │ q:   552 idle  50 run │ done:  38,241  err: 2 │   135.9 run/s │ p95:  2500ms │ rss: 189MB │ sq: 0
+   404s │ draining     │ q:   472 idle  50 run │ done:  38,479  err: 2 │     119 run/s │ p95:  2500ms │ rss: 189MB │ sq: 0
+   406s │ draining     │ q:     3 idle  36 run │ done:  39,032  err: 2 │   276.4 run/s │ p95:  2500ms │ rss: 189MB │ sq: 0
+   408s │ draining     │ q:     0 idle  14 run │ done:  39,064  err: 2 │      16 run/s │ p95:  2500ms │ rss: 189MB │ sq: 0
+   410s │ draining     │ q:     0 idle   3 run │ done:  39,076  err: 2 │       6 run/s │ p95:  2500ms │ rss: 189MB │ sq: 0
+   411s │ done         │ q:     0 idle   0 run │ done:  39,079  err: 2 │     3.7 run/s │ p95:  2500ms │ rss: 189MB │ sq: 0
+
+════════════════════════════════════════════════════════════════════════════════
+Post-Mortem Report  [Realistic (API call simulation)]
+════════════════════════════════════════════════════════════════════════════════
+
+  Totals
+  ──────
+    Duration:        411s
+    Events emitted:  8,510
+    Runs completed:  39,079
+    Runs errored:    2
+    Retries:         1,211
+    Dead letters:    2
+    SQLite errors:   0
+    Throughput:      95 runs/s avg
+
+  Run Duration
+  ────────────
+    avg:  427ms
+    p50:  250ms
+    p95:  2500ms
+    min:  19ms
+    max:  8269ms
+
+  Duration Histogram
+  ──────────────────
+      ≤50ms      3678  ███████████
+     ≤100ms      6630  ████████████████████
+     ≤250ms     10020  ██████████████████████████████
+     ≤500ms     13201  ████████████████████████████████████████
+        ≤1s      3431  ██████████
+      ≤2.5s       308  █
+        ≤5s      1781  █████
+       ≤10s        32  
+
+  Memory
+  ──────
+    RSS:        189MB
+    Heap used:  31MB
+    Heap total: 56MB
+    DB file:    50MB
+
+  P95 Trend (10s buckets)
+  ───────────────────────
+     -41s    2500ms  (22876 runs)  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+     259s    2500ms  (16205 runs)  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+
+  Queue Depth Over Time
+  ─────────────────────
+       2s  warm-up            0 idle  
+       4s  warm-up            0 idle  
+       6s  warm-up            0 idle  
+       8s  warm-up            0 idle  
+      10s  warm-up            0 idle  
+      12s  warm-up            0 idle  
+      14s  warm-up            0 idle  
+      16s  warm-up            0 idle  
+      18s  warm-up            0 idle  
+      20s  warm-up            1 idle  ░
+      22s  warm-up            0 idle  
+      24s  warm-up            0 idle  
+      26s  warm-up            0 idle  
+      28s  warm-up            0 idle  
+      30s  warm-up            0 idle  
+      32s  steady             0 idle  
+      34s  steady             2 idle  ░
+      36s  steady             0 idle  
+      38s  steady             3 idle  ░
+      40s  steady             1 idle  ░
+      42s  steady             1 idle  ░
+      44s  steady             1 idle  ░
+      46s  steady             1 idle  ░
+      48s  steady             0 idle  
+      50s  steady             1 idle  ░
+      52s  steady             2 idle  ░
+      54s  steady             1 idle  ░
+      56s  steady             1 idle  ░
+      58s  steady             0 idle  
+      60s  steady             0 idle  
+      62s  steady             2 idle  ░
+      64s  steady             0 idle  
+      66s  steady             2 idle  ░
+      68s  steady             1 idle  ░
+      70s  steady             1 idle  ░
+      72s  steady             0 idle  
+      74s  steady             1 idle  ░
+      76s  steady             1 idle  ░
+      78s  steady             1 idle  ░
+      80s  steady             0 idle  
+      82s  steady             1 idle  ░
+      84s  steady             0 idle  
+      86s  steady             1 idle  ░
+      88s  steady             0 idle  
+      90s  steady             0 idle  
+      92s  peak               0 idle  
+      94s  peak              13 idle  ░
+      96s  peak              28 idle  ░
+      98s  peak              32 idle  ░
+     100s  peak              26 idle  ░
+     102s  peak              39 idle  ░
+     104s  peak              58 idle  ░
+     106s  peak              74 idle  ░
+     108s  peak              79 idle  ░
+     110s  peak             118 idle  ░
+     112s  peak             126 idle  ░
+     114s  peak             129 idle  ░
+     116s  peak             143 idle  ░
+     118s  peak             142 idle  ░
+     120s  peak             154 idle  ░
+     122s  peak             164 idle  ░
+     124s  peak             172 idle  ░
+     126s  peak             192 idle  ░
+     128s  peak             213 idle  ░░
+     130s  peak             212 idle  ░░
+     132s  peak             245 idle  ░░
+     134s  peak             243 idle  ░░
+     136s  peak             249 idle  ░░
+     138s  peak             273 idle  ░░
+     140s  peak             279 idle  ░░
+     142s  peak             295 idle  ░░
+     144s  peak             314 idle  ░░
+     146s  peak             315 idle  ░░
+     148s  peak             336 idle  ░░
+     150s  peak             370 idle  ░░░
+     152s  surge            436 idle  ░░░
+     154s  surge            499 idle  ░░░░
+     156s  surge            585 idle  ░░░░
+     158s  surge            666 idle  ░░░░░
+     160s  surge            778 idle  ░░░░░░
+     162s  surge            888 idle  ░░░░░░
+     164s  surge           1004 idle  ░░░░░░░
+     166s  surge           1082 idle  ░░░░░░░░
+     168s  surge           1162 idle  ░░░░░░░░
+     170s  surge           1263 idle  ░░░░░░░░░
+     172s  surge           1350 idle  ░░░░░░░░░░
+     174s  surge           1443 idle  ░░░░░░░░░░░
+     176s  surge           1557 idle  ░░░░░░░░░░░
+     178s  surge           1654 idle  ░░░░░░░░░░░░
+     180s  surge           1728 idle  ░░░░░░░░░░░░░
+     182s  surge           1827 idle  ░░░░░░░░░░░░░
+     184s  surge           1931 idle  ░░░░░░░░░░░░░░
+     186s  surge           2023 idle  ░░░░░░░░░░░░░░░
+     188s  surge           2123 idle  ░░░░░░░░░░░░░░░░
+     190s  surge           2220 idle  ░░░░░░░░░░░░░░░░
+     192s  surge           2328 idle  ░░░░░░░░░░░░░░░░░
+     194s  surge           2434 idle  ░░░░░░░░░░░░░░░░░░
+     196s  surge           2538 idle  ░░░░░░░░░░░░░░░░░░░
+     198s  surge           2631 idle  ░░░░░░░░░░░░░░░░░░░
+     200s  surge           2735 idle  ░░░░░░░░░░░░░░░░░░░░
+     202s  surge           2833 idle  ░░░░░░░░░░░░░░░░░░░░░
+     204s  surge           2936 idle  ░░░░░░░░░░░░░░░░░░░░░
+     206s  surge           2999 idle  ░░░░░░░░░░░░░░░░░░░░░░
+     208s  surge           3081 idle  ░░░░░░░░░░░░░░░░░░░░░░░
+     210s  surge           3181 idle  ░░░░░░░░░░░░░░░░░░░░░░░
+     212s  spike           3339 idle  ░░░░░░░░░░░░░░░░░░░░░░░░
+     214s  spike           3465 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░
+     216s  spike           3619 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░
+     218s  spike           3778 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     220s  spike           3946 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     222s  spike           4098 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     224s  spike           4241 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     226s  spike           4385 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     228s  spike           4530 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     230s  spike           4692 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     232s  spike           4866 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     234s  spike           5039 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     236s  spike           5182 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     238s  spike           5313 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     240s  spike           5469 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     242s  cool-down       5466 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     244s  cool-down       5452 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     246s  cool-down       5423 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     248s  cool-down       5384 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     250s  cool-down       5356 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     252s  cool-down       5312 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     254s  cool-down       5283 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     256s  cool-down       5277 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     258s  cool-down       5248 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     260s  cool-down       5245 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     262s  cool-down       5219 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     264s  cool-down       5193 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     266s  cool-down       5176 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     268s  cool-down       5146 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     270s  cool-down       5123 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     272s  cool-down       5084 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     274s  cool-down       5079 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     276s  cool-down       5069 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     278s  cool-down       5083 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     280s  cool-down       5092 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     282s  cool-down       5080 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     284s  cool-down       5076 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     286s  cool-down       5076 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     288s  cool-down       5068 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     290s  cool-down       5106 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     292s  cool-down       5112 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     294s  cool-down       5122 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     296s  cool-down       5125 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     298s  cool-down       5132 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     300s  cool-down       5111 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     302s  draining        5106 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     304s  draining        5099 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     306s  draining        5079 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     308s  draining        5038 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     310s  draining        5036 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     312s  draining        5031 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     314s  draining        5034 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     316s  draining        5031 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     318s  draining        5023 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     320s  draining        5019 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     322s  draining        5006 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     324s  draining        4981 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     326s  draining        4964 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     328s  draining        4938 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     330s  draining        4877 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     332s  draining        4819 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     334s  draining        4794 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     336s  draining        4803 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     338s  draining        4651 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     340s  draining        4499 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     342s  draining        4295 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     344s  draining        4108 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     346s  draining        3917 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     348s  draining        3733 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     350s  draining        3540 idle  ░░░░░░░░░░░░░░░░░░░░░░░░░░
+     352s  draining        3330 idle  ░░░░░░░░░░░░░░░░░░░░░░░░
+     354s  draining        3128 idle  ░░░░░░░░░░░░░░░░░░░░░░░
+     356s  draining        2920 idle  ░░░░░░░░░░░░░░░░░░░░░
+     358s  draining        2755 idle  ░░░░░░░░░░░░░░░░░░░░
+     360s  draining        2538 idle  ░░░░░░░░░░░░░░░░░░░
+     362s  draining        2331 idle  ░░░░░░░░░░░░░░░░░
+     364s  draining        2172 idle  ░░░░░░░░░░░░░░░░
+     366s  draining        2009 idle  ░░░░░░░░░░░░░░░
+     368s  draining        1817 idle  ░░░░░░░░░░░░░
+     370s  draining        1655 idle  ░░░░░░░░░░░░
+     372s  draining        1502 idle  ░░░░░░░░░░░
+     374s  draining        1317 idle  ░░░░░░░░░░
+     376s  draining        1071 idle  ░░░░░░░░
+     378s  draining         971 idle  ░░░░░░░
+     380s  draining         939 idle  ░░░░░░░
+     382s  draining         908 idle  ░░░░░░░
+     384s  draining         893 idle  ░░░░░░░
+     386s  draining         865 idle  ░░░░░░
+     388s  draining         835 idle  ░░░░░░
+     390s  draining         805 idle  ░░░░░░
+     392s  draining         777 idle  ░░░░░░
+     394s  draining         755 idle  ░░░░░░
+     396s  draining         727 idle  ░░░░░
+     398s  draining         695 idle  ░░░░░
+     400s  draining         645 idle  ░░░░░
+     402s  draining         552 idle  ░░░░
+     404s  draining         472 idle  ░░░
+     406s  draining           3 idle  ░
+     408s  draining           0 idle  
+     410s  draining           0 idle  
+     411s  done               0 idle  
+
+  RSS Over Time
+  ─────────────
+       2s   136MB  
+       4s   136MB  
+       6s   138MB  ▒
+       8s   139MB  ▒
+      10s   140MB  ▒▒
+      12s   140MB  ▒▒
+      14s   140MB  ▒▒
+      16s   140MB  ▒▒
+      18s   140MB  ▒▒
+      20s   140MB  ▒▒
+      22s   140MB  ▒▒
+      24s   140MB  ▒▒
+      26s   140MB  ▒▒
+      28s   140MB  ▒▒
+      30s   140MB  ▒▒
+      32s   140MB  ▒▒
+      34s   140MB  ▒▒
+      36s   140MB  ▒▒
+      38s   140MB  ▒▒
+      40s   140MB  ▒▒
+      42s   140MB  ▒▒
+      44s   141MB  ▒▒
+      46s   141MB  ▒▒
+      48s   142MB  ▒▒▒
+      50s   142MB  ▒▒▒
+      52s   142MB  ▒▒▒
+      54s   142MB  ▒▒▒
+      56s   142MB  ▒▒▒
+      58s   143MB  ▒▒▒
+      60s   143MB  ▒▒▒
+      62s   143MB  ▒▒▒
+      64s   143MB  ▒▒▒▒
+      66s   143MB  ▒▒▒▒
+      68s   144MB  ▒▒▒▒
+      70s   144MB  ▒▒▒▒
+      72s   144MB  ▒▒▒▒
+      74s   144MB  ▒▒▒▒
+      76s   144MB  ▒▒▒▒
+      78s   146MB  ▒▒▒▒▒
+      80s   148MB  ▒▒▒▒▒▒
+      82s   149MB  ▒▒▒▒▒▒▒
+      84s   149MB  ▒▒▒▒▒▒▒
+      86s   149MB  ▒▒▒▒▒▒▒
+      88s   149MB  ▒▒▒▒▒▒▒
+      90s   150MB  ▒▒▒▒▒▒▒
+      92s   150MB  ▒▒▒▒▒▒▒
+      94s   150MB  ▒▒▒▒▒▒▒
+      96s   151MB  ▒▒▒▒▒▒▒▒
+      98s   152MB  ▒▒▒▒▒▒▒▒
+     100s   152MB  ▒▒▒▒▒▒▒▒
+     102s   153MB  ▒▒▒▒▒▒▒▒▒
+     104s   153MB  ▒▒▒▒▒▒▒▒▒
+     106s   154MB  ▒▒▒▒▒▒▒▒▒
+     108s   155MB  ▒▒▒▒▒▒▒▒▒▒
+     110s   155MB  ▒▒▒▒▒▒▒▒▒▒
+     112s   157MB  ▒▒▒▒▒▒▒▒▒▒▒
+     114s   163MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     116s   170MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     118s   171MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     120s   171MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     122s   171MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     124s   171MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     126s   172MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     128s   172MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     130s   172MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     132s   173MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     134s   173MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     136s   174MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     138s   174MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     140s   175MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     142s   176MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     144s   177MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     146s   177MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     148s   178MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     150s   178MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     152s   178MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     154s   179MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     156s   180MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     158s   180MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     160s   181MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     162s   181MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     164s   181MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     166s   181MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     168s   181MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     170s   181MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     172s   182MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     174s   182MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     176s   182MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     178s   182MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     180s   182MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     182s   183MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     184s   183MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     186s   183MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     188s   184MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     190s   191MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     192s   197MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     194s   206MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     196s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     198s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     200s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     202s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     204s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     206s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     208s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     210s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     212s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     214s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     216s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     218s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     220s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     222s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     224s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     226s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     228s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     230s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     232s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     234s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     236s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     238s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     240s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     242s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     244s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     246s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     248s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     250s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     252s   210MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     254s   211MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     256s   211MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     258s   211MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     260s   211MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     262s   211MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     264s   211MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     266s   211MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     268s   211MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     270s   211MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     272s   211MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     274s   212MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     276s   212MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     278s   212MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     280s   212MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     282s   212MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     284s   212MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     286s   212MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     288s   213MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     290s   213MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     292s   162MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     294s   163MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     296s   166MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     298s   166MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     300s   166MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     302s   166MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     304s   167MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     306s   167MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     308s   170MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     310s   173MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     312s   173MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     314s   173MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     316s   173MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     318s   173MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     320s   173MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     322s   173MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     324s   173MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     326s   173MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     328s   173MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     330s   173MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     332s   173MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     334s   173MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     336s   173MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     338s   175MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     340s   177MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     342s   182MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     344s   186MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     346s   186MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     348s   186MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     350s   186MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     352s   186MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     354s   186MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     356s   186MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     358s   186MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     360s   186MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     362s   186MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     364s   186MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     366s   186MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     368s   186MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     370s   187MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     372s   187MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     374s   187MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     376s   187MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     378s   187MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     380s   187MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     382s   187MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     384s   187MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     386s   187MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     388s   187MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     390s   187MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     392s   187MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     394s   187MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     396s   188MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     398s   188MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     400s   188MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     402s   189MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     404s   189MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     406s   189MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     408s   189MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     410s   189MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+     411s   189MB  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+
+  Final queue: 0 idle, 0 running
+
+════════════════════════════════════════════════════════════════════════════════
+Dashboard: http://localhost:3400
+Press Ctrl+C to stop

@@ -192,6 +192,44 @@ describe('createRunStore (memory)', () => {
     })
   })
 
+  describe('getByStatusPaginated', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('separates completed from deferred and supports root-only ascending queries', () => {
+      vi.useFakeTimers()
+
+      const completed = store.create('completed', 'evt', null)
+      store.transition(completed.id, 'running')
+      store.setResult(completed.id, { success: true })
+      store.transition(completed.id, 'completed')
+
+      vi.advanceTimersByTime(10)
+
+      const deferred = store.create('deferred', 'evt', null)
+      store.transition(deferred.id, 'running')
+      store.setResult(deferred.id, { success: true, triggerEvent: 'next', deferred: true })
+      store.transition(deferred.id, 'completed')
+
+      vi.advanceTimersByTime(10)
+
+      const childDeferred = store.create('child-deferred', 'evt', null, deferred.id)
+      store.transition(childDeferred.id, 'running')
+      store.setResult(childDeferred.id, { success: true, triggerEvent: 'child:next', deferred: true })
+      store.transition(childDeferred.id, 'completed')
+
+      const deferredPage = store.getByStatusPaginated!('deferred', 10, 0, { root: true, order: 'asc' })
+      expect(deferredPage.total).toBe(1)
+      expect(deferredPage.runs).toHaveLength(1)
+      expect(deferredPage.runs[0].id).toBe(deferred.id)
+
+      const completedPage = store.getByStatusPaginated!('completed', 10, 0)
+      expect(completedPage.total).toBe(1)
+      expect(completedPage.runs[0].id).toBe(completed.id)
+    })
+  })
+
   describe('getAll', () => {
     it('returns all runs', () => {
       store.create('a', 'e', null)

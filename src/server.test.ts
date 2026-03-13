@@ -45,7 +45,7 @@ function routeTests(label: string, opts: EngineOptions) {
       expect(data.summary.runs.completed).toBe(1)
       expect(data.summary.effects.completed).toBe(1)
       expect(data.buckets.length).toBeGreaterThanOrEqual(1)
-      expect(typeof data.bucketSizeMs).toBe('number')
+      expect(data.bucketSizeMs).toBe(5 * 60_000)
     })
 
     it('GET /overview returns health and recent runs in one payload', async () => {

@@ -69,6 +69,17 @@ export type ProcessState = 'idle' | 'running' | 'completed' | 'errored'
  */
 export type RunStatus = ProcessState | 'deferred' | 'dead-letter'
 
+/** Sort order for run list queries. */
+export type RunSortOrder = 'asc' | 'desc'
+
+/** Shared options for paginated run queries. */
+export type RunQueryOptions = {
+  /** Restrict results to root runs only. */
+  root?: boolean
+  /** Order by `startedAt`. Defaults to `'desc'`. */
+  order?: RunSortOrder
+}
+
 /**
  * Maps each {@link ProcessState} to the states it may legally transition to.
  * Used internally by the run store to enforce the state machine.
@@ -494,7 +505,9 @@ export type RunStore = {
   /** Count runs in a given state without loading them. */
   countByState?(state: ProcessState): number
   /** Retrieve a page of runs with total count, optionally filtered by state. */
-  getByStatePaginated?(state: ProcessState | null, limit: number, offset: number, opts?: { root?: boolean }): { runs: Run[]; total: number }
+  getByStatePaginated?(state: ProcessState | null, limit: number, offset: number, opts?: RunQueryOptions): { runs: Run[]; total: number }
+  /** Retrieve a page of runs with total count using operator-facing status semantics. */
+  getByStatusPaginated?(status: RunStatus, limit: number, offset: number, opts?: RunQueryOptions): { runs: Run[]; total: number }
   /** Check whether any runs exist in a given state without loading them. */
   hasState?(state: ProcessState): boolean
   /** Delete completed non-deferred runs older than the cutoff. Returns the deleted run IDs. */
@@ -660,6 +673,7 @@ export interface Engine {
 
   /**
    * Get all runs in `completed` state.
+   * @deprecated Prefer `getRunsPaginated('completed', ...)` or `getRunsByStatusPaginated(...)` to avoid materializing all completed runs.
    * @returns Array of completed runs.
    */
   getCompleted(): Run[]
@@ -728,8 +742,11 @@ export interface Engine {
   /** Count runs in a given state without loading them. */
   countByState(state: ProcessState): number
 
+  /** Retrieve a page of runs with total count using operator-facing status semantics. */
+  getRunsByStatusPaginated(status: RunStatus, limit: number, offset: number, opts?: RunQueryOptions): { runs: Run[]; total: number }
+
   /** Retrieve a page of runs with total count, optionally filtered by state. */
-  getRunsPaginated(state: ProcessState | null, limit: number, offset: number, opts?: { root?: boolean }): { runs: Run[]; total: number }
+  getRunsPaginated(state: ProcessState | null, limit: number, offset: number, opts?: RunQueryOptions): { runs: Run[]; total: number }
 
   /**
    * Get engine metrics combining store-derived queue state and runtime counters.

@@ -30,6 +30,8 @@ import type {
   ProcessDefinition,
   ProcessDefinitionConfig,
   ProcessState,
+  RunQueryOptions,
+  RunSortOrder,
   RunStatus,
   RetryPolicy,
   Run,
@@ -66,6 +68,8 @@ export type {
   ProcessDefinition,
   ProcessDefinitionConfig,
   ProcessState,
+  RunQueryOptions,
+  RunSortOrder,
   RunStatus,
   RetryPolicy,
   Run,
@@ -427,11 +431,30 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     return runStore.getByState(state).length
   }
 
-  function getRunsPaginated(state: ProcessState | null, limit: number, offset: number, opts?: { root?: boolean }): { runs: Run[]; total: number } {
+  function getRunsByStatusPaginated(status: RunStatus, limit: number, offset: number, opts?: RunQueryOptions): { runs: Run[]; total: number } {
+    if (runStore.getByStatusPaginated) return runStore.getByStatusPaginated(status, limit, offset, opts)
+    let runs =
+      status === 'completed'
+        ? runStore.getByState('completed').filter((run) => getRunStatus(run) === 'completed')
+        : status === 'errored'
+          ? runStore.getByState('errored').filter((run) => getRunStatus(run) === 'errored')
+          : status === 'deferred'
+            ? runStore.getByState('completed').filter((run) => getRunStatus(run) === 'deferred')
+            : status === 'dead-letter'
+              ? runStore.getByState('errored').filter((run) => getRunStatus(run) === 'dead-letter')
+              : runStore.getByState(status)
+    if (opts?.root) runs = runs.filter((r) => r.parentRunId === null)
+    const order = opts?.order ?? 'desc'
+    runs.sort((a, b) => (order === 'asc' ? a.startedAt - b.startedAt : b.startedAt - a.startedAt))
+    return { runs: runs.slice(offset, offset + limit), total: runs.length }
+  }
+
+  function getRunsPaginated(state: ProcessState | null, limit: number, offset: number, opts?: RunQueryOptions): { runs: Run[]; total: number } {
     if (runStore.getByStatePaginated) return runStore.getByStatePaginated(state, limit, offset, opts)
     let runs = state ? runStore.getByState(state) : runStore.getAll()
     if (opts?.root) runs = runs.filter((r) => r.parentRunId === null)
-    runs.sort((a, b) => b.startedAt - a.startedAt)
+    const order = opts?.order ?? 'desc'
+    runs.sort((a, b) => (order === 'asc' ? a.startedAt - b.startedAt : b.startedAt - a.startedAt))
     return { runs: runs.slice(offset, offset + limit), total: runs.length }
   }
 
@@ -601,73 +624,75 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   }
 
   function getObservability(query?: EngineObservabilityQuery): EngineObservabilityReport {
-    return observability?.getObservability(query) ?? {
-      from: query?.from ?? Date.now(),
-      to: query?.to ?? Date.now(),
-      bucketSizeMs: query?.bucketMs ?? 5 * 60_000,
-      summary: {
-        runs: {
-          started: 0,
-          completed: 0,
-          failed: 0,
-          retried: 0,
-          deadLetters: 0,
-          resumed: 0,
-          successRate: null,
-          duration: {
-            count: 0,
-            sumMs: 0,
-            minMs: null,
-            maxMs: null,
-            avgMs: null,
-            p50Ms: null,
-            p95Ms: null,
-            histogram: {
-              le10ms: 0,
-              le50ms: 0,
-              le100ms: 0,
-              le250ms: 0,
-              le500ms: 0,
-              le1000ms: 0,
-              le2500ms: 0,
-              le5000ms: 0,
-              le10000ms: 0,
-              gt10000ms: 0,
+    return (
+      observability?.getObservability(query) ?? {
+        from: query?.from ?? Date.now(),
+        to: query?.to ?? Date.now(),
+        bucketSizeMs: query?.bucketMs ?? 5 * 60_000,
+        summary: {
+          runs: {
+            started: 0,
+            completed: 0,
+            failed: 0,
+            retried: 0,
+            deadLetters: 0,
+            resumed: 0,
+            successRate: null,
+            duration: {
+              count: 0,
+              sumMs: 0,
+              minMs: null,
+              maxMs: null,
+              avgMs: null,
+              p50Ms: null,
+              p95Ms: null,
+              histogram: {
+                le10ms: 0,
+                le50ms: 0,
+                le100ms: 0,
+                le250ms: 0,
+                le500ms: 0,
+                le1000ms: 0,
+                le2500ms: 0,
+                le5000ms: 0,
+                le10000ms: 0,
+                gt10000ms: 0,
+              },
             },
           },
-        },
-        effects: {
-          completed: 0,
-          failed: 0,
-          replayed: 0,
-          successRate: null,
-          duration: {
-            count: 0,
-            sumMs: 0,
-            minMs: null,
-            maxMs: null,
-            avgMs: null,
-            p50Ms: null,
-            p95Ms: null,
-            histogram: {
-              le10ms: 0,
-              le50ms: 0,
-              le100ms: 0,
-              le250ms: 0,
-              le500ms: 0,
-              le1000ms: 0,
-              le2500ms: 0,
-              le5000ms: 0,
-              le10000ms: 0,
-              gt10000ms: 0,
+          effects: {
+            completed: 0,
+            failed: 0,
+            replayed: 0,
+            successRate: null,
+            duration: {
+              count: 0,
+              sumMs: 0,
+              minMs: null,
+              maxMs: null,
+              avgMs: null,
+              p50Ms: null,
+              p95Ms: null,
+              histogram: {
+                le10ms: 0,
+                le50ms: 0,
+                le100ms: 0,
+                le250ms: 0,
+                le500ms: 0,
+                le1000ms: 0,
+                le2500ms: 0,
+                le5000ms: 0,
+                le10000ms: 0,
+                gt10000ms: 0,
+              },
             },
           },
+          system: { leaseReclaims: 0, internalErrors: 0, recentErrorCount: 0 },
         },
-        system: { leaseReclaims: 0, internalErrors: 0, recentErrorCount: 0 },
-      },
-      buckets: [],
-      recentErrors: [],
-    }
+        buckets: [],
+        recentErrors: [],
+      }
+    )
   }
 
   function subscribeEvents(listener: (event: EngineEvent) => void): () => void {
@@ -717,6 +742,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     getEffects,
     getGraph,
     countByState,
+    getRunsByStatusPaginated,
     getRunsPaginated,
     getMetrics,
     getObservability,

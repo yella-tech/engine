@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'preact/hooks'
+import { useState, useCallback, useEffect } from 'preact/hooks'
 import { ChainPicker } from './ChainPicker'
 import { navigate } from '../hooks/useHashRoute'
 import { usePolling } from '../hooks/usePolling'
@@ -167,13 +167,13 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
   const [graphData, setGraphData] = useState<{ nodes: GraphNode[]; edges: GraphEdge[] } | null>(null)
   const [chainRuns, setChainRuns] = useState<any[] | null>(null)
   const [chainOptions, setChainOptions] = useState<{ id: string; label: string }[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loadingStatic, setLoadingStatic] = useState(true)
+  const [loadingChain, setLoadingChain] = useState(false)
 
-  const fetchData = useCallback(async () => {
+  const fetchStaticData = useCallback(async () => {
     try {
-      const fetches: Promise<any>[] = [rpc.graph.get(), rpc.runs.list({ limit: 100, root: true })]
-      if (chainId) fetches.push(rpc.runs.chain(chainId))
-      const [graphRes, runsRes, chainRes] = await Promise.all(fetches)
+      setLoadingStatic(true)
+      const [graphRes, runsRes] = await Promise.all([rpc.graph.get(), rpc.runs.list({ limit: 100, root: true })])
       setGraphData(graphRes)
       const runs = runsRes.runs || []
       setChainOptions(
@@ -184,16 +184,44 @@ export function GraphPanel({ chainId, onNodeClick }: GraphPanelProps) {
             return { id: r.id, label: `${r.processName} / ${r.eventName} \u25B8 chain \u2014 ${when}` }
           }),
       )
-      if (chainId && chainRes) {
-        setChainRuns((chainRes.runs || []).sort((a: any, b: any) => (a.depth ?? 0) - (b.depth ?? 0) || a.startedAt - b.startedAt))
-      } else {
-        setChainRuns(null)
-      }
     } catch {}
-    setLoading(false)
-  }, [chainId])
+    finally {
+      setLoadingStatic(false)
+    }
+  }, [])
 
-  usePolling(fetchData, 3000, true)
+  const fetchChainRuns = useCallback(async (id: string) => {
+    try {
+      setLoadingChain(true)
+      const chainRes = await rpc.runs.chain(id)
+      setChainRuns((chainRes.runs || []).sort((a: any, b: any) => (a.depth ?? 0) - (b.depth ?? 0) || a.startedAt - b.startedAt))
+    } catch {
+      setChainRuns(null)
+    } finally {
+      setLoadingChain(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void fetchStaticData()
+  }, [fetchStaticData])
+
+  useEffect(() => {
+    if (!chainId) {
+      setChainRuns(null)
+      setLoadingChain(false)
+      return
+    }
+    void fetchChainRuns(chainId)
+  }, [chainId, fetchChainRuns])
+
+  usePolling(() => {
+    if (chainId) {
+      void fetchChainRuns(chainId)
+    }
+  }, 10_000, !!chainId, { immediate: false })
+
+  const loading = loadingStatic || loadingChain
 
   if (loading) return <div class="empty">Loading graph...</div>
 

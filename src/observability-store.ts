@@ -292,26 +292,14 @@ function summarizeBuckets(buckets: EngineObservabilityBucket[], recentErrorCount
       deadLetters: aggregate.runDeadLetterCount,
       resumed: aggregate.runResumedCount,
       successRate: successRate(aggregate.runCompletedCount, aggregate.runFailedCount),
-      duration: buildDurationStats(
-        aggregate.runDurationSumMs,
-        aggregate.runDurationCount,
-        aggregate.runDurationMinMs,
-        aggregate.runDurationMaxMs,
-        aggregate.runDurationHistogram,
-      ),
+      duration: buildDurationStats(aggregate.runDurationSumMs, aggregate.runDurationCount, aggregate.runDurationMinMs, aggregate.runDurationMaxMs, aggregate.runDurationHistogram),
     },
     effects: {
       completed: aggregate.effectCompletedCount,
       failed: aggregate.effectFailedCount,
       replayed: aggregate.effectReplayedCount,
       successRate: successRate(aggregate.effectCompletedCount, aggregate.effectFailedCount),
-      duration: buildDurationStats(
-        aggregate.effectDurationSumMs,
-        aggregate.effectDurationCount,
-        aggregate.effectDurationMinMs,
-        aggregate.effectDurationMaxMs,
-        aggregate.effectDurationHistogram,
-      ),
+      duration: buildDurationStats(aggregate.effectDurationSumMs, aggregate.effectDurationCount, aggregate.effectDurationMinMs, aggregate.effectDurationMaxMs, aggregate.effectDurationHistogram),
     },
     system: {
       leaseReclaims: aggregate.leaseReclaimCount,
@@ -323,6 +311,16 @@ function summarizeBuckets(buckets: EngineObservabilityBucket[], recentErrorCount
 
 function bucketStartFor(timestamp: number, bucketSizeMs: number): number {
   return Math.floor(timestamp / bucketSizeMs) * bucketSizeMs
+}
+
+function backfillEmptyBuckets(buckets: Map<number, RollupRow>, from: number, to: number, bucketSizeMs: number): Map<number, RollupRow> {
+  const filled = new Map(buckets)
+  for (let bucketStart = bucketStartFor(from, bucketSizeMs); bucketStart <= bucketStartFor(to, bucketSizeMs); bucketStart += bucketSizeMs) {
+    if (!filled.has(bucketStart)) {
+      filled.set(bucketStart, emptyRollup(bucketStart, bucketSizeMs))
+    }
+  }
+  return filled
 }
 
 function stringifyError(error: unknown): string {
@@ -718,12 +716,7 @@ export function createSqliteEngineObservabilityStore(db: Database.Database): Eng
   }
 }
 
-export function createEngineObservabilityRecorder(opts: {
-  store: EngineObservabilityStore
-  lookupRun(runId: string): Run | null
-  baseBucketMs?: number
-  flushIntervalMs?: number
-}) {
+export function createEngineObservabilityRecorder(opts: { store: EngineObservabilityStore; lookupRun(runId: string): Run | null; baseBucketMs?: number; flushIntervalMs?: number }) {
   const baseBucketMs = opts.baseBucketMs ?? ENGINE_OBSERVABILITY_BASE_BUCKET_MS
   const flushIntervalMs = opts.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS
   const pending = new Map<number, RollupRow>()
@@ -869,7 +862,7 @@ export function createEngineObservabilityRecorder(opts: {
       mergeRollup(existing, row)
     }
 
-    const buckets = Array.from(rebucketed.values())
+    const buckets = Array.from(backfillEmptyBuckets(rebucketed, from, to, bucketSizeMs).values())
       .sort((a, b) => a.bucketStart - b.bucketStart)
       .map(toPublicBucket)
     const recentErrors = opts.store.listErrors(from, to, errorLimit)

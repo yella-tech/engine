@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import Database from 'better-sqlite3'
 import { createSqliteEngineObservabilityStore } from './observability-store.js'
 import { isDeferredRun } from './status.js'
-import type { EffectRecord, EffectStore, HandlerResult, ProcessState, Run, RunStore, TimelineEntry } from './types.js'
+import type { EffectRecord, EffectStore, HandlerResult, ProcessState, Run, RunQueryOptions, RunSortOrder, RunStatus, RunStore, TimelineEntry } from './types.js'
 import { VALID_TRANSITIONS } from './types.js'
 
 type RunRow = {
@@ -214,6 +214,20 @@ function applyMigrations(db: Database.Database) {
   }
 }
 
+const DEFERRED_MARKER_PREDICATE = ["coalesce(CAST(json_extract(result, '$.deferred') AS INTEGER), 0) = 1", "coalesce(json_type(result, '$.triggerEvent'), '') = 'text'"].join(' AND ')
+
+const DEAD_LETTER_MARKER_PREDICATE = "coalesce(json_extract(timeline, '$[' || (json_array_length(timeline) - 1) || '].event'), '') = 'dead-letter'"
+
+function buildStatusQuery(where: string, order: RunSortOrder, root = false): string {
+  const rootClause = root ? ' AND parent_run_id IS NULL' : ''
+  return `SELECT * FROM runs WHERE ${where}${rootClause} ORDER BY started_at ${order.toUpperCase()} LIMIT ? OFFSET ?`
+}
+
+function buildStatusCountQuery(where: string, root = false): string {
+  const rootClause = root ? ' AND parent_run_id IS NULL' : ''
+  return `SELECT COUNT(*) as cnt FROM runs WHERE ${where}${rootClause}`
+}
+
 function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
   // Prepared statements
   const stmts = {
@@ -245,13 +259,41 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     setHandlerVersion: db.prepare('UPDATE runs SET handler_version = ? WHERE id = ?'),
     countByState: db.prepare('SELECT COUNT(*) as cnt FROM runs WHERE state = ?'),
     hasState: db.prepare('SELECT 1 FROM runs WHERE state = ? LIMIT 1'),
-    paginatedByState: db.prepare('SELECT * FROM runs WHERE state = ? ORDER BY started_at DESC LIMIT ? OFFSET ?'),
-    paginatedAll: db.prepare('SELECT * FROM runs ORDER BY started_at DESC LIMIT ? OFFSET ?'),
+    paginatedByStateDesc: db.prepare('SELECT * FROM runs WHERE state = ? ORDER BY started_at DESC LIMIT ? OFFSET ?'),
+    paginatedByStateAsc: db.prepare('SELECT * FROM runs WHERE state = ? ORDER BY started_at ASC LIMIT ? OFFSET ?'),
+    paginatedAllDesc: db.prepare('SELECT * FROM runs ORDER BY started_at DESC LIMIT ? OFFSET ?'),
+    paginatedAllAsc: db.prepare('SELECT * FROM runs ORDER BY started_at ASC LIMIT ? OFFSET ?'),
     countAll: db.prepare('SELECT COUNT(*) as cnt FROM runs'),
-    paginatedByStateRoot: db.prepare("SELECT * FROM runs WHERE state = ? AND parent_run_id IS NULL ORDER BY started_at DESC LIMIT ? OFFSET ?"),
-    paginatedAllRoot: db.prepare("SELECT * FROM runs WHERE parent_run_id IS NULL ORDER BY started_at DESC LIMIT ? OFFSET ?"),
-    countByStateRoot: db.prepare("SELECT COUNT(*) as cnt FROM runs WHERE state = ? AND parent_run_id IS NULL"),
-    countAllRoot: db.prepare("SELECT COUNT(*) as cnt FROM runs WHERE parent_run_id IS NULL"),
+    paginatedByStateRootDesc: db.prepare('SELECT * FROM runs WHERE state = ? AND parent_run_id IS NULL ORDER BY started_at DESC LIMIT ? OFFSET ?'),
+    paginatedByStateRootAsc: db.prepare('SELECT * FROM runs WHERE state = ? AND parent_run_id IS NULL ORDER BY started_at ASC LIMIT ? OFFSET ?'),
+    paginatedAllRootDesc: db.prepare('SELECT * FROM runs WHERE parent_run_id IS NULL ORDER BY started_at DESC LIMIT ? OFFSET ?'),
+    paginatedAllRootAsc: db.prepare('SELECT * FROM runs WHERE parent_run_id IS NULL ORDER BY started_at ASC LIMIT ? OFFSET ?'),
+    countByStateRoot: db.prepare('SELECT COUNT(*) as cnt FROM runs WHERE state = ? AND parent_run_id IS NULL'),
+    countAllRoot: db.prepare('SELECT COUNT(*) as cnt FROM runs WHERE parent_run_id IS NULL'),
+    paginatedCompletedStatusDesc: db.prepare(buildStatusQuery(`state = 'completed' AND NOT (${DEFERRED_MARKER_PREDICATE})`, 'desc')),
+    paginatedCompletedStatusAsc: db.prepare(buildStatusQuery(`state = 'completed' AND NOT (${DEFERRED_MARKER_PREDICATE})`, 'asc')),
+    paginatedCompletedStatusRootDesc: db.prepare(buildStatusQuery(`state = 'completed' AND NOT (${DEFERRED_MARKER_PREDICATE})`, 'desc', true)),
+    paginatedCompletedStatusRootAsc: db.prepare(buildStatusQuery(`state = 'completed' AND NOT (${DEFERRED_MARKER_PREDICATE})`, 'asc', true)),
+    countCompletedStatus: db.prepare(buildStatusCountQuery(`state = 'completed' AND NOT (${DEFERRED_MARKER_PREDICATE})`)),
+    countCompletedStatusRoot: db.prepare(buildStatusCountQuery(`state = 'completed' AND NOT (${DEFERRED_MARKER_PREDICATE})`, true)),
+    paginatedDeferredStatusDesc: db.prepare(buildStatusQuery(`state = 'completed' AND ${DEFERRED_MARKER_PREDICATE}`, 'desc')),
+    paginatedDeferredStatusAsc: db.prepare(buildStatusQuery(`state = 'completed' AND ${DEFERRED_MARKER_PREDICATE}`, 'asc')),
+    paginatedDeferredStatusRootDesc: db.prepare(buildStatusQuery(`state = 'completed' AND ${DEFERRED_MARKER_PREDICATE}`, 'desc', true)),
+    paginatedDeferredStatusRootAsc: db.prepare(buildStatusQuery(`state = 'completed' AND ${DEFERRED_MARKER_PREDICATE}`, 'asc', true)),
+    countDeferredStatus: db.prepare(buildStatusCountQuery(`state = 'completed' AND ${DEFERRED_MARKER_PREDICATE}`)),
+    countDeferredStatusRoot: db.prepare(buildStatusCountQuery(`state = 'completed' AND ${DEFERRED_MARKER_PREDICATE}`, true)),
+    paginatedErroredStatusDesc: db.prepare(buildStatusQuery(`state = 'errored' AND NOT (${DEAD_LETTER_MARKER_PREDICATE})`, 'desc')),
+    paginatedErroredStatusAsc: db.prepare(buildStatusQuery(`state = 'errored' AND NOT (${DEAD_LETTER_MARKER_PREDICATE})`, 'asc')),
+    paginatedErroredStatusRootDesc: db.prepare(buildStatusQuery(`state = 'errored' AND NOT (${DEAD_LETTER_MARKER_PREDICATE})`, 'desc', true)),
+    paginatedErroredStatusRootAsc: db.prepare(buildStatusQuery(`state = 'errored' AND NOT (${DEAD_LETTER_MARKER_PREDICATE})`, 'asc', true)),
+    countErroredStatus: db.prepare(buildStatusCountQuery(`state = 'errored' AND NOT (${DEAD_LETTER_MARKER_PREDICATE})`)),
+    countErroredStatusRoot: db.prepare(buildStatusCountQuery(`state = 'errored' AND NOT (${DEAD_LETTER_MARKER_PREDICATE})`, true)),
+    paginatedDeadLetterStatusDesc: db.prepare(buildStatusQuery(`state = 'errored' AND ${DEAD_LETTER_MARKER_PREDICATE}`, 'desc')),
+    paginatedDeadLetterStatusAsc: db.prepare(buildStatusQuery(`state = 'errored' AND ${DEAD_LETTER_MARKER_PREDICATE}`, 'asc')),
+    paginatedDeadLetterStatusRootDesc: db.prepare(buildStatusQuery(`state = 'errored' AND ${DEAD_LETTER_MARKER_PREDICATE}`, 'desc', true)),
+    paginatedDeadLetterStatusRootAsc: db.prepare(buildStatusQuery(`state = 'errored' AND ${DEAD_LETTER_MARKER_PREDICATE}`, 'asc', true)),
+    countDeadLetterStatus: db.prepare(buildStatusCountQuery(`state = 'errored' AND ${DEAD_LETTER_MARKER_PREDICATE}`)),
+    countDeadLetterStatusRoot: db.prepare(buildStatusCountQuery(`state = 'errored' AND ${DEAD_LETTER_MARKER_PREDICATE}`, true)),
     pruneCompletedCandidates: db.prepare("SELECT * FROM runs WHERE state = 'completed' AND completed_at IS NOT NULL AND completed_at < ?"),
     clearParentRunIds: db.prepare('UPDATE runs SET parent_run_id = NULL WHERE parent_run_id = ?'),
     deleteById: db.prepare('DELETE FROM runs WHERE id = ?'),
@@ -484,26 +526,94 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     return stmts.hasState.get(state) !== undefined
   }
 
-  function getByStatePaginated(state: ProcessState | null, limit: number, offset: number, opts?: { root?: boolean }): { runs: Run[]; total: number } {
-    const root = opts?.root ?? false
-    let rows: RunRow[]
-    let total: number
+  function getStatePageStatement(state: ProcessState | null, order: RunSortOrder, root: boolean) {
+    if (state && root) return order === 'asc' ? stmts.paginatedByStateRootAsc : stmts.paginatedByStateRootDesc
+    if (state) return order === 'asc' ? stmts.paginatedByStateAsc : stmts.paginatedByStateDesc
+    if (root) return order === 'asc' ? stmts.paginatedAllRootAsc : stmts.paginatedAllRootDesc
+    return order === 'asc' ? stmts.paginatedAllAsc : stmts.paginatedAllDesc
+  }
 
-    if (state && root) {
-      rows = stmts.paginatedByStateRoot.all(state, limit, offset) as RunRow[]
-      total = (stmts.countByStateRoot.get(state) as { cnt: number }).cnt
-    } else if (state) {
-      rows = stmts.paginatedByState.all(state, limit, offset) as RunRow[]
-      total = (stmts.countByState.get(state) as { cnt: number }).cnt
-    } else if (root) {
-      rows = stmts.paginatedAllRoot.all(limit, offset) as RunRow[]
-      total = (stmts.countAllRoot.get() as { cnt: number }).cnt
-    } else {
-      rows = stmts.paginatedAll.all(limit, offset) as RunRow[]
-      total = (stmts.countAll.get() as { cnt: number }).cnt
+  function getStatusStatements(status: RunStatus, order: RunSortOrder, root: boolean) {
+    switch (status) {
+      case 'completed':
+        return {
+          page: root
+            ? order === 'asc'
+              ? stmts.paginatedCompletedStatusRootAsc
+              : stmts.paginatedCompletedStatusRootDesc
+            : order === 'asc'
+              ? stmts.paginatedCompletedStatusAsc
+              : stmts.paginatedCompletedStatusDesc,
+          count: root ? stmts.countCompletedStatusRoot : stmts.countCompletedStatus,
+        }
+      case 'deferred':
+        return {
+          page: root
+            ? order === 'asc'
+              ? stmts.paginatedDeferredStatusRootAsc
+              : stmts.paginatedDeferredStatusRootDesc
+            : order === 'asc'
+              ? stmts.paginatedDeferredStatusAsc
+              : stmts.paginatedDeferredStatusDesc,
+          count: root ? stmts.countDeferredStatusRoot : stmts.countDeferredStatus,
+        }
+      case 'errored':
+        return {
+          page: root
+            ? order === 'asc'
+              ? stmts.paginatedErroredStatusRootAsc
+              : stmts.paginatedErroredStatusRootDesc
+            : order === 'asc'
+              ? stmts.paginatedErroredStatusAsc
+              : stmts.paginatedErroredStatusDesc,
+          count: root ? stmts.countErroredStatusRoot : stmts.countErroredStatus,
+        }
+      case 'dead-letter':
+        return {
+          page: root
+            ? order === 'asc'
+              ? stmts.paginatedDeadLetterStatusRootAsc
+              : stmts.paginatedDeadLetterStatusRootDesc
+            : order === 'asc'
+              ? stmts.paginatedDeadLetterStatusAsc
+              : stmts.paginatedDeadLetterStatusDesc,
+          count: root ? stmts.countDeadLetterStatusRoot : stmts.countDeadLetterStatus,
+        }
     }
 
-    return { runs: rows.map(rowToRun), total }
+    throw new Error(`Unsupported status query: ${status}`)
+  }
+
+  function getByStatePaginated(state: ProcessState | null, limit: number, offset: number, opts?: RunQueryOptions): { runs: Run[]; total: number } {
+    const root = opts?.root ?? false
+    const order = opts?.order ?? 'desc'
+    const pageStmt = getStatePageStatement(state, order, root)
+
+    if (state) {
+      const rows = pageStmt.all(state, limit, offset) as RunRow[]
+      const totalRow = root ? (stmts.countByStateRoot.get(state) as { cnt: number }) : (stmts.countByState.get(state) as { cnt: number })
+      const total = totalRow.cnt
+      return { runs: rows.map(rowToRun), total }
+    } else {
+      const rows = pageStmt.all(limit, offset) as RunRow[]
+      const totalRow = root ? (stmts.countAllRoot.get() as { cnt: number }) : (stmts.countAll.get() as { cnt: number })
+      const total = totalRow.cnt
+      return { runs: rows.map(rowToRun), total }
+    }
+  }
+
+  function getByStatusPaginated(status: RunStatus, limit: number, offset: number, opts?: RunQueryOptions): { runs: Run[]; total: number } {
+    if (status === 'idle' || status === 'running') {
+      return getByStatePaginated(status, limit, offset, opts)
+    }
+
+    const root = opts?.root ?? false
+    const order = opts?.order ?? 'desc'
+    const statements = getStatusStatements(status, order, root)
+    const rows = statements.page.all(limit, offset) as RunRow[]
+    const totalRow = statements.count.get() as { cnt: number }
+
+    return { runs: rows.map(rowToRun), total: totalRow.cnt }
   }
 
   function pruneCompletedBefore(cutoffMs: number): string[] {
@@ -592,6 +702,7 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     countByState,
     hasState,
     getByStatePaginated,
+    getByStatusPaginated,
     pruneCompletedBefore,
     close,
   }

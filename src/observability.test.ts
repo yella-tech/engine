@@ -74,11 +74,16 @@ function observabilityTests(label: string, storeOpts: EngineOptions) {
     it('emits run:retry on retryable failure', async () => {
       setup()
       let attempt = 0
-      engine.register('proc', 'go', async () => {
-        attempt++
-        if (attempt === 1) throw new Error('fail')
-        return { success: true }
-      }, { retry: { maxRetries: 2, delay: 0 } })
+      engine.register(
+        'proc',
+        'go',
+        async () => {
+          attempt++
+          if (attempt === 1) throw new Error('fail')
+          return { success: true }
+        },
+        { retry: { maxRetries: 2, delay: 0 } },
+      )
       engine.emit('go', {})
       await engine.drain()
 
@@ -89,9 +94,14 @@ function observabilityTests(label: string, storeOpts: EngineOptions) {
 
     it('emits run:dead then run:error when retries exhausted', async () => {
       setup()
-      engine.register('proc', 'go', async () => {
-        throw new Error('always fails')
-      }, { retry: { maxRetries: 1, delay: 0 } })
+      engine.register(
+        'proc',
+        'go',
+        async () => {
+          throw new Error('always fails')
+        },
+        { retry: { maxRetries: 1, delay: 0 } },
+      )
       engine.emit('go', {})
       await engine.drain()
 
@@ -169,14 +179,19 @@ function observabilityTests(label: string, storeOpts: EngineOptions) {
     it('emits effect:replay on retry with completed effect', async () => {
       setup()
       let callCount = 0
-      engine.register('proc', 'go', async (ctx) => {
-        await ctx.effect('idempotent', async () => {
-          callCount++
-          return 'done'
-        })
-        if (callCount === 1) throw new Error('first attempt fails')
-        return { success: true }
-      }, { retry: { maxRetries: 1, delay: 0 } })
+      engine.register(
+        'proc',
+        'go',
+        async (ctx) => {
+          await ctx.effect('idempotent', async () => {
+            callCount++
+            return 'done'
+          })
+          if (callCount === 1) throw new Error('first attempt fails')
+          return { success: true }
+        },
+        { retry: { maxRetries: 1, delay: 0 } },
+      )
       engine.emit('go', {})
       await engine.drain()
 
@@ -260,9 +275,14 @@ function observabilityTests(label: string, storeOpts: EngineOptions) {
 
     it('getMetrics tracks retry and dead-letter totals', async () => {
       setup()
-      engine.register('proc', 'go', async () => {
-        throw new Error('always fails')
-      }, { retry: { maxRetries: 2, delay: 0 } })
+      engine.register(
+        'proc',
+        'go',
+        async () => {
+          throw new Error('always fails')
+        },
+        { retry: { maxRetries: 2, delay: 0 } },
+      )
       engine.emit('go', {})
       await engine.drain()
 
@@ -324,6 +344,21 @@ function observabilityTests(label: string, storeOpts: EngineOptions) {
       expect(report.recentErrors).toHaveLength(1)
       expect(report.recentErrors[0].kind).toBe('run')
       expect(report.recentErrors[0].message).toBe('boom')
+    })
+
+    it('getObservability backfills empty buckets across the requested window', async () => {
+      setup()
+      engine.register('ok', 'ok', async () => ({ success: true }))
+
+      engine.emit('ok', {})
+      await engine.drain()
+
+      const now = Date.now()
+      const report = engine.getObservability({ from: now - 10 * 60_000, to: now + 10 * 60_000, bucketMs: 5 * 60_000 })
+
+      expect(report.buckets).toHaveLength(5)
+      expect(report.buckets.some((bucket) => bucket.runs.started === 0)).toBe(true)
+      expect(report.summary.runs.started).toBe(1)
     })
 
     it('getObservability captures effect and internal errors', async () => {

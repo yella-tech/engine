@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'preact/hooks'
+import { useState, useCallback, useEffect, useRef } from 'preact/hooks'
 import { FilterTabs } from './FilterTabs'
 import { RunsTable } from './RunsTable'
 import { Pagination } from './Pagination'
@@ -45,6 +45,13 @@ export function RunsPanel({ onRowClick, activeRunId }: { onRowClick: (id: string
       void doFetch()
     }, effectiveDelay)
   }, [doFetch])
+
+  useEffect(() => () => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current)
+      refreshTimerRef.current = null
+    }
+  }, [scheduleRefresh])
 
   usePolling(doFetch, 30_000, true)
   useEventStream<EngineStreamEvent>(

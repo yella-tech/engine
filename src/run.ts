@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
-import { isDeferredRun } from './status.js'
-import type { HandlerResult, ProcessState, Run, RunStore, TimelineEntry } from './types.js'
+import { getRunStatus, isDeferredRun } from './status.js'
+import type { HandlerResult, ProcessState, Run, RunQueryOptions, RunStatus, RunStore, TimelineEntry } from './types.js'
 import { VALID_TRANSITIONS } from './types.js'
 
 export function createRunStore(): RunStore {
@@ -251,15 +251,32 @@ export function createRunStore(): RunStore {
     return false
   }
 
-  function getByStatePaginated(state: ProcessState | null, limit: number, offset: number, opts?: { root?: boolean }): { runs: Run[]; total: number } {
+  function paginateRuns(list: Run[], limit: number, offset: number, opts?: RunQueryOptions): { runs: Run[]; total: number } {
+    const order = opts?.order ?? 'desc'
+    const filtered = opts?.root ? list.filter((run) => run.parentRunId === null) : list
+    filtered.sort((a, b) => (order === 'asc' ? a.startedAt - b.startedAt : b.startedAt - a.startedAt))
+    return {
+      runs: filtered.slice(offset, offset + limit).map(cloneRun),
+      total: filtered.length,
+    }
+  }
+
+  function getByStatePaginated(state: ProcessState | null, limit: number, offset: number, opts?: RunQueryOptions): { runs: Run[]; total: number } {
     let filtered: Run[] = []
     for (const run of runs.values()) {
       if (state && run.state !== state) continue
-      if (opts?.root && run.parentRunId !== null) continue
       filtered.push(run)
     }
-    filtered.sort((a, b) => b.startedAt - a.startedAt)
-    return { runs: filtered.slice(offset, offset + limit).map(cloneRun), total: filtered.length }
+    return paginateRuns(filtered, limit, offset, opts)
+  }
+
+  function getByStatusPaginated(status: RunStatus, limit: number, offset: number, opts?: RunQueryOptions): { runs: Run[]; total: number } {
+    const filtered: Run[] = []
+    for (const run of runs.values()) {
+      if (getRunStatus(run) !== status) continue
+      filtered.push(run)
+    }
+    return paginateRuns(filtered, limit, offset, opts)
   }
 
   function pruneCompletedBefore(cutoffMs: number): string[] {
@@ -317,6 +334,7 @@ export function createRunStore(): RunStore {
     countByState,
     hasState,
     getByStatePaginated,
+    getByStatusPaginated,
     pruneCompletedBefore,
   }
 }

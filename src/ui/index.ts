@@ -31,7 +31,7 @@ export { Timeline } from './components/Timeline'
 export { usePolling } from './hooks/usePolling'
 export { useEventStream } from './hooks/useEventStream'
 export { useEscapeKey } from './hooks/useEscapeKey'
-export { useHashRoute, navigate } from './hooks/useHashRoute'
+export { useHashRoute, navigate, buildHashPath } from './hooks/useHashRoute'
 export type { RouteMatch } from './hooks/useHashRoute'
 
 // Utilities

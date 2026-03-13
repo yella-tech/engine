@@ -1,5 +1,7 @@
 import type { ComponentChildren } from 'preact'
+import { useEffect, useState } from 'preact/hooks'
 import { useHashRoute } from '../hooks/useHashRoute'
+import { formatUptime } from '../lib/format'
 
 export interface TabDef {
   id: string
@@ -12,14 +14,30 @@ export interface TabDef {
 export function Nav({
   brand,
   tabs,
-  uptime,
+  uptimeStartedAtMs,
 }: {
   brand: string
   tabs: TabDef[]
-  uptime: string
+  uptimeStartedAtMs: number | null
 }) {
   const route = useHashRoute(tabs)
   const visibleTabs = tabs.filter((t) => !t.hidden)
+  const [uptime, setUptime] = useState('--')
+
+  useEffect(() => {
+    if (uptimeStartedAtMs === null) {
+      setUptime('--')
+      return
+    }
+
+    const update = () => {
+      setUptime(formatUptime(Math.max(0, (Date.now() - uptimeStartedAtMs) / 1000)))
+    }
+
+    update()
+    const timer = setInterval(update, 1000)
+    return () => clearInterval(timer)
+  }, [uptimeStartedAtMs])
 
   return (
     <nav class="nav">
