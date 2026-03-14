@@ -26,10 +26,11 @@ engine.process({
   name: 'research',
   on: 'topic:assigned',
   run: async (ctx) => {
+    const payload = ctx.payload as { topic: string }
     // already called? returns the stored result.
     const analysis = await ctx.effect({
       key: 'llm-analyze',
-      run: () => llm.chat(`Analyze: ${ctx.payload.topic}`),
+      run: () => llm.chat(`Analyze: ${payload.topic}`),
     })
 
     return ctx.ok({ analysis }, { emit: 'topic:analyzed' })
@@ -38,6 +39,7 @@ engine.process({
 
 engine.emit('topic:assigned', { topic: 'durable execution models' })
 
+// emitAndWait() waits only for the runs created by one emission and their descendants.
 // drain() waits for all runs to finish, only needed in scripts and tests.
 // in a server, emit() returns immediately and the dispatcher handles the rest.
 await engine.drain()
@@ -49,6 +51,8 @@ await engine.stop()
 ### Completed effects do not re-run
 
 `ctx.effect()` stores the result of any external call. If your handler retries after a crash, effects that already completed return their stored result. The function doesn't run again.
+
+If recovery finds an effect record still in `started`, the engine fences that effect instead of running the side effect body a second time.
 
 ```typescript
 const result = await ctx.effect({
@@ -67,6 +71,12 @@ No replay engine, no determinism constraints, no framework DSL. Your handler re-
 
 Lease-based heartbeating detects abandoned runs. When the process restarts, expired leases are reclaimed and runs resume with their stored effect results intact.
 
+`engine.stop({ graceful: true })` keeps heartbeats alive while in-flight handlers finish. A hard stop aborts active handlers cooperatively through `ctx.signal` before the engine tears down leases and timers.
+
+### Cooperative cancellation
+
+Every handler receives an `AbortSignal` on `ctx.signal`. `cancelRun()` and hard `stop()` use it to abort active work, and later `ctx.setContext()` and `ctx.effect()` calls are fenced once the run is no longer active.
+
 ### Event chains
 
 Handlers can emit follow-up events, building multi-step pipelines with full correlation tracking.
@@ -76,9 +86,10 @@ engine.process({
   name: 'classify',
   on: 'ticket:new',
   run: async (ctx) => {
+    const payload = ctx.payload as { text: string }
     const category = await ctx.effect({
       key: 'classify',
-      run: () => llm.chat(`Classify this ticket: ${ctx.payload.text}`),
+      run: () => llm.chat(`Classify this ticket: ${payload.text}`),
     })
     return ctx.ok({ category }, { emit: 'ticket:classified' })
   },
@@ -88,9 +99,10 @@ engine.process({
   name: 'route',
   on: 'ticket:classified',
   run: async (ctx) => {
+    const payload = ctx.payload as { category: string }
     await ctx.effect({
       key: 'notify',
-      run: () => slack.post(`#${ctx.payload.category}`, ctx.context),
+      run: () => slack.post(`#${payload.category}`, ctx.context),
     })
     return ctx.ok()
   },
@@ -99,20 +111,23 @@ engine.process({
 
 Every run in a chain shares a correlation ID. A configurable max chain depth prevents infinite loops.
 
+Deferred runs keep their next event on the completed run until `engine.resume(runId)` succeeds. If no child run is admitted during resume, the run stays deferred and `resume()` throws.
+
 ## Features
 
-- **Durable effects** with per-key deduplication across retries
+- **Durable effects** with completed-result replay and in-progress fencing
 - **Configurable retries** with fixed or computed backoff delays
 - **Lease-based crash recovery** with heartbeating
 - **Event chaining** with correlation IDs and context propagation
 - **Deferred and dead-letter statuses** for operator-facing pause/failure visibility
 - **Lifecycle events and metrics** via `onEvent()` and `engine.getMetrics()`
 - **Schema validation** via Zod (or any object with a `.parse()` method)
-- **Idempotent event admission** with composite unique keys
+- **Atomic event admission** with event-scoped idempotency and singleton claims
+- **Cooperative cancellation** via `AbortSignal` on every handler context
 - **Concurrency control** with configurable parallelism
 - **Built-in dev dashboard** for inspecting runs, traces, timelines, and graph views
 - **SQLite persistence** via better-sqlite3 (WAL mode, prepared statements, migrations)
-- **In-memory mode** for tests and scripts that don't need durability
+- **In-memory mode** for tests and scripts with structured-clone safety
 
 ## Storage
 
@@ -129,9 +144,17 @@ const engine = createEngine()
 
 SQLite provides crash recovery, cross-restart idempotency, and the effect ledger. In-memory mode is useful for tests and short-lived scripts.
 
+Payloads, context values, and handler results should be `structuredClone`-compatible. In-memory mode rejects values it cannot clone instead of storing shared object references.
+
+## Waiting For Work
+
+Use `emitAndWait()` when you want to block on one emitted chain only. It waits for the emitted root runs and their descendants, and ignores unrelated work elsewhere in the engine.
+
+Use `drain()` when you want the whole engine to go idle, including unrelated runs and delayed retries.
+
 ## Observability
 
-You can subscribe to lifecycle events and inspect the current queue snapshot without bringing in another dependency:
+You can tap into lifecycle events at configuration time with `onEvent()`, add listeners later with `engine.subscribeEvents()`, inspect the current queue snapshot with `engine.getMetrics()`, and pull bucketed rollups with `engine.getObservability()`:
 
 ```typescript
 const engine = createEngine({
@@ -142,7 +165,21 @@ const engine = createEngine({
   },
 })
 
+const unsubscribe = engine.subscribeEvents((event) => {
+  if (event.type === 'run:resume') {
+    console.log(`resumed ${event.resumedRun.id} -> ${event.childRuns.length} child run(s)`)
+  }
+})
+
 console.log(engine.getMetrics())
+console.log(
+  engine.getObservability({
+    from: Date.now() - 60 * 60 * 1000,
+    to: Date.now(),
+  }).summary,
+)
+
+unsubscribe()
 ```
 
 API and dashboard responses expose both the raw persisted `state` and a derived operator-facing `status`, so `completed` vs `deferred` and `errored` vs `dead-letter` stay distinguishable without changing the core state machine.
@@ -188,7 +225,7 @@ npm run load-test
 
 The dashboard components are exported as a library via `@yellatech/engine/ui` for use by packages that extend the engine (e.g. `@yellatech/conduit`). The `DashboardShell` accepts custom tabs and panels, so consumers can add their own views without forking the dashboard.
 
-For the operator UI migration plan and architecture reference, see [docs/operator-ui-architecture.md](docs/operator-ui-architecture.md).
+For the operator UI migration plan and architecture reference, see the GitHub doc: [operator-ui-architecture.md](https://github.com/yella-tech/engine/blob/main/docs/operator-ui-architecture.md).
 
 ### Developing the Dashboard
 
