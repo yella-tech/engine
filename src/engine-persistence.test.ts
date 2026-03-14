@@ -361,6 +361,47 @@ describe('multi-worker correctness (SQLite)', () => {
     await engine2.stop()
   })
 
+  it('graceful stop keeps the lease alive until the active handler finishes', async () => {
+    let callCount = 0
+    const engine1 = createEngine({
+      store: { type: 'sqlite', path: tmpFile },
+      leaseTimeoutMs: 60,
+      heartbeatIntervalMs: 20,
+    })
+
+    const handler = async () => {
+      callCount++
+      await new Promise((r) => setTimeout(r, 150))
+      return { success: true as const }
+    }
+
+    engine1.register('proc', 'evt', handler)
+
+    engine1.emit('evt', null)
+    await new Promise((r) => setTimeout(r, 20))
+
+    const stopPromise = engine1.stop({ graceful: true, timeoutMs: 2_000 })
+    await new Promise((r) => setTimeout(r, 90))
+
+    const engine2 = createEngine({
+      store: { type: 'sqlite', path: tmpFile },
+      leaseTimeoutMs: 60,
+      heartbeatIntervalMs: 20,
+    })
+    engine2.register('proc', 'evt', handler)
+
+    await stopPromise
+    await new Promise((r) => setTimeout(r, 120))
+
+    const store = createSqliteRunStore(tmpFile)
+    const completed = store.getByState('completed')
+    expect(completed).toHaveLength(1)
+    expect(callCount).toBe(1)
+    store.close!()
+
+    await engine2.stop()
+  })
+
   it('effect deduplication across crash/recovery', async () => {
     let effectCallCount = 0
 
@@ -410,6 +451,50 @@ describe('multi-worker correctness (SQLite)', () => {
     expect(completed[0].result!.payload).toEqual({ chargeId: 'ch_abc' })
     // Effect fn was called only once (by engine1), engine2 replayed stored output
     expect(effectCallCount).toBe(1)
+
+    await engine2.stop()
+  })
+
+  it('does not execute an effect again when a reclaimed run sees an in-progress effect record', async () => {
+    let effectCallCount = 0
+
+    const engine1 = createEngine({
+      store: { type: 'sqlite', path: tmpFile },
+      leaseTimeoutMs: 100,
+      handlerTimeoutMs: 60_000,
+    })
+
+    engine1.register('proc', 'evt', async (ctx) => {
+      await ctx.effect('charge', async () => {
+        effectCallCount++
+        return await new Promise(() => {})
+      })
+      return { success: true }
+    })
+
+    engine1.emit('evt', null)
+    await new Promise((r) => setTimeout(r, 50))
+    await engine1.stop()
+    await new Promise((r) => setTimeout(r, 150))
+
+    const engine2 = createEngine({
+      store: { type: 'sqlite', path: tmpFile },
+      leaseTimeoutMs: 100,
+      retry: { maxRetries: 0 },
+    })
+
+    engine2.register('proc', 'evt', async (ctx) => {
+      await ctx.effect('charge', () => {
+        effectCallCount++
+        return { chargeId: 'duplicate' }
+      })
+      return { success: true }
+    })
+
+    await new Promise((r) => setTimeout(r, 100))
+
+    expect(effectCallCount).toBe(1)
+    expect(engine2.getErrored()).toHaveLength(1)
 
     await engine2.stop()
   })

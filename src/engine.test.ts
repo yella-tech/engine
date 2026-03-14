@@ -609,6 +609,22 @@ function engineTests(label: string, opts: EngineOptions) {
         expect(() => engine.resume(run.id)).toThrow(/no triggerEvent/)
       })
 
+      it('resume leaves the run deferred when no child runs are created', async () => {
+        engine = createEngine(opts)
+        engine.register('proc', 'start', async () => ({
+          success: true,
+          triggerEvent: 'missing',
+          deferred: true,
+        }))
+
+        await engine.emitAndWait('start', {})
+        const deferred = engine.getCompleted()[0]
+
+        expect(() => engine.resume(deferred.id)).toThrow(/did not create any child runs/)
+        const after = engine.getRun(deferred.id)!
+        expect(after.result?.deferred).toBe(true)
+      })
+
       it('resume throws on unknown runId', () => {
         engine = createEngine(opts)
         expect(() => engine.resume('nonexistent')).toThrow(/not found/)
@@ -751,6 +767,20 @@ function idempotencyRaceTests(label: string, opts: EngineOptions) {
       expect(runs1).toHaveLength(1)
       expect(runs2).toHaveLength(1)
     })
+
+    it('same idempotency key can be reused for a different event', async () => {
+      engine = createEngine(opts)
+      engine.register('proc-a', 'evt-a', async () => ({ success: true }))
+      engine.register('proc-b', 'evt-b', async () => ({ success: true }))
+
+      const runs1 = engine.emit('evt-a', 'a', { idempotencyKey: 'shared-key' })
+      const runs2 = engine.emit('evt-b', 'b', { idempotencyKey: 'shared-key' })
+
+      expect(runs1).toHaveLength(1)
+      expect(runs2).toHaveLength(1)
+      await engine.drain()
+      expect(engine.getCompleted()).toHaveLength(2)
+    })
   })
 }
 
@@ -817,6 +847,22 @@ function convenienceTests(label: string, opts: EngineOptions) {
 
       const runs = await engine.emitAndWait('no-handler', null)
       expect(runs).toHaveLength(0)
+    })
+
+    it('emitAndWait() only waits for the emitted chain, not unrelated work', async () => {
+      engine = createEngine(opts)
+      engine.register('slow', 'slow', async () => {
+        await new Promise((r) => setTimeout(r, 100))
+        return { success: true }
+      })
+      engine.register('fast', 'fast', async () => ({ success: true, payload: 'fast-done' }))
+
+      engine.emit('slow', null)
+      await new Promise((r) => setTimeout(r, 10))
+
+      const runs = await engine.emitAndWait('fast', null, { timeoutMs: 50 })
+      expect(runs).toHaveLength(1)
+      expect(runs[0].result!.payload).toBe('fast-done')
     })
   })
 }

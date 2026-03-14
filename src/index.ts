@@ -83,6 +83,7 @@ export type {
 export { EngineError, ErrorCode, VALID_TRANSITIONS } from './types.js'
 export { createEffectStore } from './effect.js'
 export { createSqliteStores } from './run-sqlite.js'
+export type { EngineObservabilityStore } from './observability-store.js'
 export { getRunStatus, isDeadLetterRun, isDeferredRun, withRunStatus, withRunStatuses } from './status.js'
 export { registerRoutes } from './server/routes.js'
 export { defaultBucketMsForWindow } from './server/engine-services.js'
@@ -292,11 +293,14 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     maxChainDepth,
     maxPayloadBytes,
     handlerTimeoutMs,
+    leaseOwner,
     effectStore,
     defaultRetry: opts.retry,
     emitEvent,
   })
-  const dispatcher = createDispatcher(runStore, bus.executeRun, concurrency, { leaseOwner, leaseTimeoutMs, heartbeatIntervalMs }, reportInternalError)
+  const dispatcher = createDispatcher(runStore, bus.executeRun, concurrency, { leaseOwner, leaseTimeoutMs, heartbeatIntervalMs }, reportInternalError, (runId, message) =>
+    bus.abortRun(runId, 'lease', message),
+  )
   let acceptingEvents = true
   let retentionTimer: ReturnType<typeof setInterval> | null = null
 
@@ -486,7 +490,9 @@ export function createEngine(opts: EngineOptions = {}): Engine {
       throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Cannot cancel run in state: ${run.state}`)
     }
     runStore.setResult(runId, { success: false, error: 'cancelled' })
-    return runStore.transition(runId, 'errored', { error: 'cancelled' })
+    const cancelled = runStore.transition(runId, 'errored', { error: 'cancelled' })
+    bus.abortRun(runId, 'cancel', 'run cancelled')
+    return cancelled
   }
 
   function resume(runId: string, payload?: unknown): Run[] {
@@ -495,7 +501,6 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     if (run.state !== 'completed') throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Cannot resume run in state: ${run.state}`)
     if (!run.result?.triggerEvent) throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Run has no triggerEvent to resume`)
     if (!run.result?.deferred) throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Run is not deferred`)
-    runStore.setResult(runId, { ...run.result, deferred: false })
     const mergedPayload =
       payload !== undefined && typeof payload === 'object' && payload !== null && typeof run.result.payload === 'object' && run.result.payload !== null
         ? { ...(run.result.payload as any), ...(payload as any) }
@@ -503,6 +508,10 @@ export function createEngine(opts: EngineOptions = {}): Engine {
           ? payload
           : run.result.payload
     const childRuns = bus.enqueue(run.result.triggerEvent, mergedPayload, run.id, run.correlationId, run.context)
+    if (childRuns.length === 0) {
+      throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Deferred run did not create any child runs: ${runId}`)
+    }
+    runStore.setResult(runId, { ...run.result, deferred: false })
     emitEvent({ type: 'run:resume', resumedRun: runStore.get(runId)!, childRuns })
     dispatcher.kick()
     return childRuns
@@ -514,6 +523,17 @@ export function createEngine(opts: EngineOptions = {}): Engine {
 
   async function stop(stopOpts?: { graceful?: boolean; timeoutMs?: number }): Promise<void> {
     acceptingEvents = false
+    dispatcher.pause()
+    if (stopOpts?.graceful) {
+      const timeout = stopOpts.timeoutMs ?? 30_000
+      await Promise.race([
+        dispatcher.waitForActive(),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new EngineError(ErrorCode.GRACEFUL_STOP_TIMEOUT, `graceful stop timed out after ${timeout}ms`)), timeout)),
+      ])
+    } else {
+      bus.abortAll('stop', 'engine stopped')
+      await dispatcher.waitForActive()
+    }
     dispatcher.stop()
     if (retentionTimer) {
       clearInterval(retentionTimer)
@@ -523,13 +543,6 @@ export function createEngine(opts: EngineOptions = {}): Engine {
       const server = await serverPromise
       await server.stop()
       serverPromise = null
-    }
-    if (stopOpts?.graceful) {
-      const timeout = stopOpts.timeoutMs ?? 30_000
-      await Promise.race([
-        dispatcher.waitForActive(),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new EngineError(ErrorCode.GRACEFUL_STOP_TIMEOUT, `graceful stop timed out after ${timeout}ms`)), timeout)),
-      ])
     }
     observability?.close()
     observability = null
@@ -571,7 +584,39 @@ export function createEngine(opts: EngineOptions = {}): Engine {
 
   async function emitAndWait(eventName: string, payload: unknown, emitOpts?: { idempotencyKey?: string; timeoutMs?: number }): Promise<Run[]> {
     const runs = emit(eventName, payload, emitOpts)
-    if (runs.length > 0) await drain(emitOpts?.timeoutMs)
+    if (runs.length > 0) {
+      const rootRunIds = runs.map((run) => run.id)
+      const timeoutMs = emitOpts?.timeoutMs ?? 30_000
+      const isChainTerminal = (runId: string) => {
+        const chain = getChain(runId)
+        if (chain.length === 0) return false
+        return chain.every((entry) => {
+          const status = getRunStatus(entry)
+          return status === 'completed' || status === 'errored' || status === 'dead-letter' || status === 'deferred'
+        })
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          clearInterval(interval)
+          reject(new EngineError(ErrorCode.DRAIN_TIMEOUT, `drain timed out after ${timeoutMs}ms`))
+        }, timeoutMs)
+
+        const interval = setInterval(() => {
+          if (rootRunIds.every(isChainTerminal)) {
+            clearTimeout(timeout)
+            clearInterval(interval)
+            resolve()
+          }
+        }, 5)
+
+        if (rootRunIds.every(isChainTerminal)) {
+          clearTimeout(timeout)
+          clearInterval(interval)
+          resolve()
+        }
+      })
+    }
     return runs.map((r) => getRun(r.id) ?? r)
   }
 
@@ -584,6 +629,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
         payload: ctx.payload,
         runId: ctx.runId,
         correlationId: ctx.correlationId,
+        signal: ctx.signal,
         context: ctx.context,
         setContext: ctx.setContext,
         effect: ({ key, run: fn }) => {

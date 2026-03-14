@@ -95,6 +95,8 @@ describe('repair APIs', () => {
 
     const retried = engine.retryRun(run.id)
     expect(retried.state).toBe('idle')
+    expect(retried.result).toBeNull()
+    expect(retried.completedAt).toBeNull()
     const lastEntry = retried.timeline[retried.timeline.length - 1]
     expect(lastEntry.error).toBe('manual retry')
 
@@ -126,6 +128,8 @@ describe('repair APIs', () => {
 
     const requeued = engine.requeueDead(run.id)
     expect(requeued.state).toBe('idle')
+    expect(requeued.result).toBeNull()
+    expect(requeued.completedAt).toBeNull()
     // Check attempt was reset (the run from transition won't show 0 directly
     // since transition doesn't change attempt, but resetAttempt was called before)
     const fresh = engine.getRun(run.id)!
@@ -158,6 +162,38 @@ describe('repair APIs', () => {
     engine.register('proc', 'evt', async () => ({ success: true }))
     const [run] = await engine.emitAndWait('evt', null)
     expect(() => engine.cancelRun(run.id)).toThrow('Cannot cancel run in state: completed')
+  })
+
+  it('cancelRun fences late context and effect writes from a running handler', async () => {
+    engine = createEngine()
+    let effectCalls = 0
+    engine.register('proc', 'evt', async (ctx) => {
+      await new Promise((r) => setTimeout(r, 25))
+      try {
+        ctx.setContext('late', true)
+      } catch {}
+      try {
+        await ctx.effect('late-effect', () => {
+          effectCalls++
+          return { ok: true }
+        })
+      } catch {}
+      await new Promise((r) => setTimeout(r, 25))
+      return { success: true }
+    })
+
+    const [run] = engine.emit('evt', null)
+    await new Promise((r) => setTimeout(r, 5))
+    const cancelled = engine.cancelRun(run.id)
+
+    expect(cancelled.state).toBe('errored')
+    await new Promise((r) => setTimeout(r, 80))
+
+    const after = engine.getRun(run.id)!
+    expect(after.context.late).toBeUndefined()
+    expect(engine.getEffects(run.id)).toHaveLength(0)
+    expect(effectCalls).toBe(0)
+    expect(after.result!.error).toBe('cancelled')
   })
 })
 
@@ -236,6 +272,33 @@ describe('invariants', () => {
     // Instead, verify that emit returns empty after stop
     const result = engine.emit('evt', null)
     expect(result).toEqual([])
+  })
+
+  it('hard stop fences late engine-mediated writes from active handlers', async () => {
+    engine = createEngine()
+    let effectCalls = 0
+    engine.register('proc', 'evt', async (ctx) => {
+      await new Promise((r) => setTimeout(r, 25))
+      try {
+        ctx.setContext('late', true)
+      } catch {}
+      try {
+        await ctx.effect('late-effect', () => {
+          effectCalls++
+          return { ok: true }
+        })
+      } catch {}
+      return { success: true }
+    })
+
+    const [run] = engine.emit('evt', null)
+    await new Promise((r) => setTimeout(r, 5))
+    await engine.stop()
+    await new Promise((r) => setTimeout(r, 80))
+
+    expect(effectCalls).toBe(0)
+    expect(engine.emit('evt', null)).toEqual([])
+    expect(() => engine.getRun(run.id)).not.toThrow()
   })
 
   it('all invalid transitions are rejected by the store', () => {
