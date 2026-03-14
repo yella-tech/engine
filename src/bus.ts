@@ -201,7 +201,7 @@ export function createBus(registry: Registry, runStore: RunStore, opts: BusOptio
     }
   }
 
-  function finalizeSuccess(run: Run, result: HandlerResult, context: Record<string, unknown>, durationMs: number) {
+  function finalizeSuccess(run: Run, result: HandlerResult, durationMs: number) {
     runStore.setResult(run.id, result)
     runStore.transition(run.id, result.success ? 'completed' : 'errored', {
       error: result.error,
@@ -215,7 +215,7 @@ export function createBus(registry: Registry, runStore: RunStore, opts: BusOptio
     }
 
     if (result.success && result.triggerEvent && !result.deferred) {
-      enqueue(result.triggerEvent, result.payload, run.id, run.correlationId, context)
+      enqueue(result.triggerEvent, result.payload, run.id, run.correlationId, finished.context)
     }
   }
 
@@ -270,11 +270,20 @@ export function createBus(registry: Registry, runStore: RunStore, opts: BusOptio
       if (opts.leaseOwner && current.leaseOwner !== opts.leaseOwner) return
 
       checkPayloadSize(result.payload)
-      finalizeSuccess(run, result, ctx.context, durationMs)
+      finalizeSuccess(run, result, durationMs)
     } catch (err) {
       const durationMs = Date.now() - startTime
-      if (err instanceof RunAbortError && (err.kind === 'cancel' || err.kind === 'lease' || err.kind === 'stop')) {
-        return
+      if (err instanceof RunAbortError) {
+        if (err.kind === 'cancel' || err.kind === 'lease') {
+          return
+        }
+        if (err.kind === 'stop') {
+          const current = runStore.get(run.id)
+          if (!current || current.state !== 'running') return
+          if (opts.leaseOwner && current.leaseOwner !== opts.leaseOwner) return
+          runStore.transition(run.id, 'idle', { error: err.message })
+          return
+        }
       }
       finalizeError(run, err, def, durationMs)
     } finally {

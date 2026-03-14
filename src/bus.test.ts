@@ -196,6 +196,26 @@ describe('createBus', () => {
       expect(childRun.context.fromParent).toBe(true)
     })
 
+    it('triggerEvent uses durable parent context instead of the handler-local snapshot', async () => {
+      registry.register('parent', 'start', async (ctx) => {
+        const persisted = { count: 1 }
+        ctx.setContext('persisted', persisted)
+        persisted.count = 2
+        ctx.context.ephemeral = true
+        return { success: true, triggerEvent: 'next' }
+      })
+      registry.register('child', 'next', async () => ({ success: true }))
+
+      const [run] = bus.enqueue('start', null)
+      store.transition(run.id, 'running')
+
+      await bus.executeRun(run)
+
+      const parentRun = store.get(run.id)!
+      const childRun = store.get(parentRun.childRunIds[0])!
+      expect(childRun.context).toEqual({ persisted: { count: 1 } })
+    })
+
     it('triggerEvent with no matching handler produces no child runs and no error', async () => {
       registry.register('proc', 'evt', async () => ({
         success: true,
