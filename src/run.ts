@@ -399,26 +399,10 @@ export function createRunStore(): RunStore {
       if (run.state !== 'completed' || run.completedAt === null || run.completedAt >= cutoffMs || isDeferredRun(run)) {
         continue
       }
-      prunedIds.add(id)
-    }
-
-    if (prunedIds.size === 0) return []
-
-    let changed = true
-    while (changed) {
-      changed = false
-      for (const id of Array.from(prunedIds)) {
-        const run = runs.get(id)
-        if (!run) {
-          prunedIds.delete(id)
-          changed = true
-          continue
-        }
-        if (run.childRunIds.some((childId) => !prunedIds.has(childId))) {
-          prunedIds.delete(id)
-          changed = true
-        }
+      if (run.childRunIds.some((childId) => runs.has(childId))) {
+        continue
       }
+      prunedIds.add(id)
     }
 
     if (prunedIds.size === 0) return []

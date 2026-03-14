@@ -432,7 +432,7 @@ describe('createRunStore (memory)', () => {
       expect(store.get(child.id)?.parentRunId).toBe(parent.id)
     })
 
-    it('prunes completed chains when every descendant is also prunable', () => {
+    it('prunes completed chains bottom-up across successive sweeps', () => {
       const parent = store.create('parent', 'evt', null)
       store.transition(parent.id, 'running')
       store.setResult(parent.id, { success: true })
@@ -445,9 +445,14 @@ describe('createRunStore (memory)', () => {
 
       vi.advanceTimersByTime(100)
 
-      const pruned = store.pruneCompletedBefore!(Date.now() - 50)
-      expect(pruned).toContain(parent.id)
-      expect(pruned).toContain(child.id)
+      const firstPruned = store.pruneCompletedBefore!(Date.now() - 50)
+      expect(firstPruned).not.toContain(parent.id)
+      expect(firstPruned).toContain(child.id)
+      expect(store.get(parent.id)).not.toBeNull()
+      expect(store.get(child.id)).toBeNull()
+
+      const secondPruned = store.pruneCompletedBefore!(Date.now() - 50)
+      expect(secondPruned).toContain(parent.id)
       expect(store.get(parent.id)).toBeNull()
       expect(store.get(child.id)).toBeNull()
     })
