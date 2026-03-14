@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import { parseDurationMs } from '../util.js'
 import type { ProcessState, RunStatus } from '../types.js'
 import type { RoutableEngine } from './contract.js'
@@ -11,6 +12,27 @@ function parsePositiveInt(value: string | undefined): number | undefined {
   const parsed = Number.parseInt(value, 10)
   if (!Number.isFinite(parsed) || parsed <= 0) return undefined
   return parsed
+}
+
+function rejectCrossOriginMutation(c: Context): Response | null {
+  const origin = c.req.header('origin')
+  if (origin) {
+    try {
+      if (new URL(origin).origin !== new URL(c.req.url).origin) {
+        return c.json({ error: 'Cross-origin mutation requests are not allowed' }, 403)
+      }
+    } catch {
+      return c.json({ error: 'Cross-origin mutation requests are not allowed' }, 403)
+    }
+    return null
+  }
+
+  const fetchSite = c.req.header('sec-fetch-site')
+  if (fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') {
+    return c.json({ error: 'Cross-origin mutation requests are not allowed' }, 403)
+  }
+
+  return null
 }
 
 /**
@@ -116,6 +138,8 @@ export function registerRoutes<T extends Hono>(app: T, engine: RoutableEngine) {
       return c.json(effects)
     })
     .post('/runs/:id/retry', (c) => {
+      const blocked = rejectCrossOriginMutation(c)
+      if (blocked) return blocked
       try {
         return c.json(services.commands.retry(c.req.param('id')))
       } catch (err) {
@@ -124,6 +148,8 @@ export function registerRoutes<T extends Hono>(app: T, engine: RoutableEngine) {
       }
     })
     .post('/runs/:id/requeue', (c) => {
+      const blocked = rejectCrossOriginMutation(c)
+      if (blocked) return blocked
       try {
         return c.json(services.commands.requeue(c.req.param('id')))
       } catch (err) {
@@ -135,6 +161,8 @@ export function registerRoutes<T extends Hono>(app: T, engine: RoutableEngine) {
       return c.json(services.reads.graph())
     })
     .post('/runs/:id/resume', async (c) => {
+      const blocked = rejectCrossOriginMutation(c)
+      if (blocked) return blocked
       let body: unknown
       const contentType = c.req.header('content-type') ?? ''
       if (contentType.includes('application/json')) {
@@ -153,6 +181,8 @@ export function registerRoutes<T extends Hono>(app: T, engine: RoutableEngine) {
       }
     })
     .post('/emit', async (c) => {
+      const blocked = rejectCrossOriginMutation(c)
+      if (blocked) return blocked
       let body: { event?: string; payload?: unknown; idempotencyKey?: string }
       try {
         body = await c.req.json()

@@ -369,6 +369,43 @@ function routeTests(label: string, opts: EngineOptions) {
       expect(data.created).toBe(1)
     })
 
+    it('POST /emit allows same-origin browser requests', async () => {
+      setup()
+      engine.register('proc', 'test-event', async () => ({ success: true }))
+
+      const res = await app.request('http://local/emit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: 'http://local',
+        },
+        body: JSON.stringify({ event: 'test-event', payload: { a: 1 } }),
+      })
+
+      expect(res.status).toBe(201)
+      const data = await res.json()
+      expect(data.created).toBe(1)
+    })
+
+    it('POST /emit rejects cross-origin browser requests', async () => {
+      setup()
+      engine.register('proc', 'test-event', async () => ({ success: true }))
+
+      const res = await app.request('http://local/emit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: 'https://evil.example',
+        },
+        body: JSON.stringify({ event: 'test-event', payload: { a: 1 } }),
+      })
+
+      expect(res.status).toBe(403)
+      expect(engine.getIdle()).toHaveLength(0)
+      expect(engine.getRunning()).toHaveLength(0)
+      expect(engine.getCompleted()).toHaveLength(0)
+    })
+
     it('POST /emit returns 400 for missing event', async () => {
       setup()
       const res = await app.request('/emit', {
@@ -402,6 +439,22 @@ function routeTests(label: string, opts: EngineOptions) {
       expect(res.ok).toBe(true)
       const data = await res.json()
       expect(data.state).toBe('idle')
+    })
+
+    it('POST /runs/:id/retry rejects cross-origin browser requests', async () => {
+      setup()
+      engine.register('fail-proc', 'go', async () => ({ success: false, error: 'boom' }))
+      engine.emit('go', {})
+      await engine.drain()
+
+      const errored = engine.getErrored()
+      const res = await app.request(`http://local/runs/${errored[0].id}/retry`, {
+        method: 'POST',
+        headers: { Origin: 'https://evil.example' },
+      })
+
+      expect(res.status).toBe(403)
+      expect(engine.getRun(errored[0].id)?.state).toBe('errored')
     })
 
     it('POST /runs/:id/retry returns 422 for non-errored run', async () => {

@@ -2,7 +2,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { Hono } from 'hono'
 import type { Context } from 'hono'
-import { cors } from 'hono/cors'
 import { serve } from '@hono/node-server'
 import type { DevServer } from '../types.js'
 import type { RoutableEngine } from './contract.js'
@@ -136,7 +135,6 @@ function safeReadDir(dir: string): string[] {
  */
 export function createDevServer(engine: RoutableEngine, opts?: { dashboardFallback?: boolean; uiDir?: string }): DevServer {
   const app = new Hono()
-  app.use('*', cors())
   createEngineApi(engine, app)
   if (opts?.dashboardFallback !== false) {
     installDashboardFallback(app, opts?.uiDir ?? resolveEngineUiDir())
