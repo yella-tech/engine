@@ -101,6 +101,7 @@ describe('SQLite restart persistence', () => {
       callCount++
       return { success: true }
     })
+    engine2.start()
 
     await new Promise((r) => setTimeout(r, 50))
 
@@ -208,6 +209,7 @@ describe('lease-based crash recovery (SQLite)', () => {
       },
     })
     engine2.register('proc', 'evt', async () => ({ success: true }))
+    engine2.start()
 
     // Wait for startup recovery
     await new Promise((r) => setTimeout(r, 50))
@@ -525,6 +527,7 @@ describe('multi-worker correctness (SQLite)', () => {
       })
       return { success: true }
     })
+    engine2.start()
 
     await new Promise((r) => setTimeout(r, 100))
 
@@ -600,5 +603,43 @@ describe('STATE_DB_PATH env var', () => {
     await engine.stop()
 
     expect(fs.existsSync('/tmp/should-not-be-used.db')).toBe(false)
+  })
+
+  it('recovered work waits for explicit start so async registration can finish first', async () => {
+    const tmpFile = path.join(os.tmpdir(), `state-start-barrier-${Date.now()}.db`)
+
+    try {
+      const engine1 = createEngine({
+        store: { type: 'sqlite', path: tmpFile },
+        concurrency: 0,
+      })
+      engine1.register('proc', 'evt', async () => ({ success: true, payload: 'recovered-after-start' }))
+      engine1.emit('evt', null)
+      await engine1.stop()
+
+      const engine2 = createEngine({
+        store: { type: 'sqlite', path: tmpFile },
+      })
+
+      await Promise.resolve()
+      engine2.register('proc', 'evt', async () => ({ success: true, payload: 'recovered-after-start' }))
+      engine2.start()
+      await engine2.drain()
+
+      expect(engine2.getCompleted()).toHaveLength(1)
+      expect(engine2.getCompleted()[0].result?.payload).toBe('recovered-after-start')
+      expect(engine2.getErrored()).toHaveLength(0)
+      await engine2.stop()
+    } finally {
+      try {
+        fs.unlinkSync(tmpFile)
+      } catch {}
+      try {
+        fs.unlinkSync(tmpFile + '-wal')
+      } catch {}
+      try {
+        fs.unlinkSync(tmpFile + '-shm')
+      } catch {}
+    }
   })
 })

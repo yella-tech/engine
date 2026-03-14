@@ -302,6 +302,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     bus.abortRun(runId, 'lease', message),
   )
   let acceptingEvents = true
+  let runtimeStarted = false
   let retentionTimer: ReturnType<typeof setInterval> | null = null
 
   function pruneExpiredRuns(): string[] {
@@ -350,8 +351,9 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     })
   }
 
-  // Resume any idle runs left from a previous crash (deferred so handlers can be registered first)
-  queueMicrotask(() => {
+  function start(): void {
+    if (runtimeStarted || !acceptingEvents) return
+    runtimeStarted = true
     try {
       const reclaimed = runStore.reclaimStale()
       for (const run of reclaimed) {
@@ -374,7 +376,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
       emitEvent({ type: 'internal:error', error: err, context: 'reclaimStale' })
     }
     dispatcher.kick()
-  })
+  }
 
   type RegisterOpts = { retry?: RetryPolicy; version?: string; singleton?: boolean; emits?: string[] }
 
@@ -394,6 +396,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
 
   function emit(eventName: string, payload: unknown, emitOpts?: { idempotencyKey?: string }): Run[] {
     if (!acceptingEvents) return []
+    start()
     const runs = bus.enqueue(eventName, payload, null, undefined, undefined, emitOpts?.idempotencyKey)
     dispatcher.kick()
     return runs
@@ -467,6 +470,8 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     const run = runStore.get(runId)
     if (!run) throw new EngineError(ErrorCode.RUN_NOT_FOUND, `Run not found: ${runId}`)
     if (run.state !== 'errored') throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Cannot retry run in state: ${run.state}`)
+    start()
+    effectStore.clearStartedEffects(runId)
     runStore.prepareRetry(runId, 0) // retryAfter=0 means immediately
     const updated = runStore.transition(runId, 'idle', { error: 'manual retry' })
     dispatcher.kick()
@@ -477,6 +482,8 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     const run = runStore.get(runId)
     if (!run) throw new EngineError(ErrorCode.RUN_NOT_FOUND, `Run not found: ${runId}`)
     if (getRunStatus(run) !== 'dead-letter') throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Cannot requeue run in status: ${getRunStatus(run)}`)
+    start()
+    effectStore.clearStartedEffects(runId)
     runStore.resetAttempt(runId)
     const updated = runStore.transition(runId, 'idle', { error: 'requeued from dead letter' })
     dispatcher.kick()
@@ -501,6 +508,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     if (run.state !== 'completed') throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Cannot resume run in state: ${run.state}`)
     if (!run.result?.triggerEvent) throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Run has no triggerEvent to resume`)
     if (!run.result?.deferred) throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Run is not deferred`)
+    start()
     const mergedPayload =
       payload !== undefined && typeof payload === 'object' && payload !== null && typeof run.result.payload === 'object' && run.result.payload !== null
         ? { ...(run.result.payload as any), ...(payload as any) }
@@ -550,6 +558,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   }
 
   async function drain(timeoutMs = 30_000): Promise<void> {
+    start()
     const hasWork = runStore.hasState ? runStore.hasState('idle') || runStore.hasState('running') : runStore.getByState('idle').length > 0 || runStore.getByState('running').length > 0
     if (!hasWork) return
 
@@ -774,6 +783,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   const engine: Engine = {
     register,
     unregister,
+    start,
     process,
     emit,
     on,
