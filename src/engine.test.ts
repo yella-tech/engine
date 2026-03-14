@@ -864,6 +864,19 @@ function convenienceTests(label: string, opts: EngineOptions) {
       expect(runs).toHaveLength(1)
       expect(runs[0].result!.payload).toBe('fast-done')
     })
+
+    it('emitAndWait() does not time out when retention runs before descendants finish', async () => {
+      engine = createEngine({ ...opts, retention: 1 })
+      engine.register('root', 'start', async () => ({ success: true, triggerEvent: 'next' }))
+      engine.register('child', 'next', async () => {
+        await new Promise((r) => setTimeout(r, 40))
+        return { success: true, payload: 'done' }
+      })
+
+      const runs = await engine.emitAndWait('start', {}, { timeoutMs: 200 })
+      expect(runs).toHaveLength(1)
+      expect(runs[0].state).toBe('completed')
+    })
   })
 }
 
