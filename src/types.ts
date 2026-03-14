@@ -161,7 +161,7 @@ export type Run = {
   completedAt: number | null
   /** Chain depth (0 for root runs, incremented for each chained event). */
   depth: number
-  /** Idempotency key used to deduplicate this run, or `null`. */
+  /** Event-scoped idempotency key used to deduplicate the originating emission, or `null`. */
   idempotencyKey: string | null
   /** Current retry attempt number (0 for the first execution). */
   attempt: number
@@ -230,22 +230,26 @@ export type HandlerContext<T = unknown> = {
   runId: string
   /** Correlation ID shared across the entire event chain. */
   correlationId: string
+  /** Abort signal for cooperative cancellation, shutdown, and timeout handling. */
+  signal: AbortSignal
   /**
    * Mutable key-value context shared across the correlation chain.
    * Deep-copied via `structuredClone` on each handler invocation, direct mutations
-   * to nested objects will not persist. Use {@link setContext} to persist changes.
+   * to nested objects will not persist. Values stored here must be
+   * `structuredClone`-compatible. Use {@link setContext} to persist changes.
    */
   context: Record<string, unknown>
   /**
    * Set a key-value pair in the run's shared context.
    * @param key - The context key.
-   * @param value - The value to store.
+   * @param value - The value to store. Must be `structuredClone`-compatible.
    */
   setContext(key: string, value: unknown): void
   /**
    * Execute a durable side effect. On first execution the function runs and the
-   * result is persisted. On retry the stored result is replayed without re-executing,
-   * providing effectively-once semantics.
+   * result is persisted. On retry a completed result is replayed without
+   * re-executing. If recovery finds the effect still in `started`, the engine
+   * fences the call and throws instead of running the side effect body again.
    *
    * @typeParam R - The return type of the effect function.
    * @param effectKey - Unique key identifying this effect within the run.
@@ -305,15 +309,18 @@ export type ProcessContext<T = unknown> = {
   runId: string
   /** Correlation ID shared across the entire event chain. */
   correlationId: string
+  /** Abort signal for cooperative cancellation, shutdown, and timeout handling. */
+  signal: AbortSignal
   /**
    * Mutable key-value context shared across the correlation chain.
    * Deep-copied via `structuredClone` on each handler invocation, direct mutations
-   * to nested objects will not persist. Use {@link setContext} to persist changes.
+   * to nested objects will not persist. Values stored here must be
+   * `structuredClone`-compatible. Use {@link setContext} to persist changes.
    */
   context: Record<string, unknown>
-  /** Set a key-value pair in the run's shared context. */
+  /** Set a key-value pair in the run's shared context. Values must be `structuredClone`-compatible. */
   setContext(key: string, value: unknown): void
-  /** Execute a durable side effect with named parameters. */
+  /** Execute a durable side effect with named parameters. Completed effects replay; in-progress effects are fenced. */
   effect: EffectFn
   /** Return a success result, optionally with a payload and/or a chained event. */
   ok<P>(payload?: P, opts?: { emit?: string }): HandlerResult
@@ -353,7 +360,7 @@ export type ProcessDefinitionConfig<T = unknown> = {
   retry?: RetryPolicy
   /** Optional version string for handler versioning and migration. */
   version?: string
-  /** When true, only one run of this process may be active (idle or running) at a time. Additional events are silently dropped. @defaultValue false */
+  /** When true, only one run of this process may be active (idle or running) at a time. Admission is enforced atomically by the store and additional matching events are dropped. @defaultValue false */
   singleton?: boolean
   /**
    * Event names this process may emit via `triggerEvent` in the handler result.
@@ -442,7 +449,7 @@ export type ProcessDefinition = {
   retry?: RetryPolicy
   /** Optional version string for handler versioning and migration. */
   version?: string
-  /** When true, only one run of this process may be active (idle or running) at a time. @defaultValue false */
+  /** When true, only one run of this process may be active (idle or running) at a time. Admission is enforced atomically by the store. @defaultValue false */
   singleton?: boolean
   /**
    * Event names this process may emit via `triggerEvent`.
@@ -450,6 +457,21 @@ export type ProcessDefinition = {
    * Used by {@link Engine.getGraph} to build the static event flow graph.
    */
   emits?: string[]
+}
+
+/**
+ * Request payload for atomically creating one or more runs for a single emitted event.
+ */
+export type RunCreateRequest = {
+  processName: string
+  eventName: string
+  payload: unknown
+  parentRunId?: string | null
+  correlationId?: string
+  context?: Record<string, unknown>
+  depth?: number
+  idempotencyKey?: string | null
+  singleton?: boolean
 }
 
 /**
@@ -468,6 +490,8 @@ export type RunStore = {
     depth?: number,
     idempotencyKey?: string | null,
   ): Run
+  /** Atomically create runs for a single emitted event, applying event-scoped idempotency and singleton admission in one store operation. */
+  createMany(requests: RunCreateRequest[]): Run[]
   /** Transition a run to a new state, recording metadata in the timeline. */
   transition(runId: string, state: ProcessState, meta?: { error?: string; event?: string; payload?: unknown }): Run
   /** Set the handler result on a run. */
@@ -492,13 +516,13 @@ export type RunStore = {
   prepareRetry(runId: string, retryAfter: number): void
   /** Reset the attempt counter on a run (used by {@link Engine.requeueDead}). */
   resetAttempt(runId: string): void
-  /** Update the heartbeat and lease expiry for a running run. */
-  heartbeat(runId: string, leaseOwner: string, leaseExpiresAt: number): void
+  /** Update the heartbeat and lease expiry for a running run. Returns `false` when the lease is no longer owned. */
+  heartbeat(runId: string, leaseOwner: string, leaseExpiresAt: number): boolean
   /** Reclaim runs whose leases have expired (crash recovery). */
   reclaimStale(): Run[]
-  /** Check whether an idempotency key has already been used. */
+  /** Check whether an idempotency key has already been used. Diagnostic helper only; event admission is defined by {@link createMany}. */
   hasIdempotencyKey(key: string): boolean
-  /** Retrieve all runs with a given idempotency key. */
+  /** Retrieve all runs with a given idempotency key. Diagnostic helper only; identical keys may exist on different event names. */
   getByIdempotencyKey(key: string): Run[]
   /** Set the handler version on a run. */
   setHandlerVersion?(runId: string, version: string): void
@@ -597,7 +621,7 @@ export interface Engine {
    * @param name - Unique process name.
    * @param eventName - The event to listen for.
    * @param handler - The handler function.
-   * @param opts - Optional retry policy and version.
+   * @param opts - Optional retry policy, version, singleton flag, and emits declarations.
    */
   register(name: string, eventName: string, handler: Handler, opts?: { retry?: RetryPolicy; version?: string; singleton?: boolean; emits?: string[] }): void
 
@@ -608,14 +632,14 @@ export interface Engine {
    * @param eventName - The event to listen for.
    * @param schema - Schema to validate payloads.
    * @param handler - The handler function receiving validated payloads.
-   * @param opts - Optional retry policy, version, and singleton flag.
+   * @param opts - Optional retry policy, version, singleton flag, and emits declarations.
    */
   register<T>(
     name: string,
     eventName: string,
     schema: Schema<T>,
     handler: (ctx: HandlerContext<T>) => Promise<HandlerResult> | HandlerResult,
-    opts?: { retry?: RetryPolicy; version?: string; singleton?: boolean },
+    opts?: { retry?: RetryPolicy; version?: string; singleton?: boolean; emits?: string[] },
   ): void
 
   /**
@@ -637,8 +661,8 @@ export interface Engine {
    * Emit an event, creating runs for all registered processes.
    * @param eventName - The event name to emit.
    * @param payload - The event payload.
-   * @param opts - Optional idempotency key.
-   * @returns The newly created runs (empty if engine is stopped, no handlers match, or the idempotency key was already used).
+   * @param opts - Optional idempotency key. Idempotency is scoped to the emitted event name.
+   * @returns The newly created runs (empty if the engine is stopped, no handlers match, the event was already admitted for that key, or singleton admission dropped every matching process).
    */
   emit(eventName: string, payload: unknown, opts?: { idempotencyKey?: string }): Run[]
 
@@ -657,11 +681,11 @@ export interface Engine {
   registerMany(defs: { name: string; event: string; handler: Handler; schema?: Schema; retry?: RetryPolicy }[]): void
 
   /**
-   * Emit an event and wait for all resulting runs to complete.
+   * Emit an event and wait for the emitted root runs and their descendants to complete.
    * @param eventName - The event name to emit.
    * @param payload - The event payload.
    * @param opts - Optional idempotency key and timeout.
-   * @returns The newly created runs with final state, or an empty array if the emit was skipped.
+   * @returns The newly created runs with final state, or an empty array if the emit was skipped. Unrelated engine work does not affect this wait.
    */
   emitAndWait(eventName: string, payload: unknown, opts?: { idempotencyKey?: string; timeoutMs?: number }): Promise<Run[]>
 
@@ -796,6 +820,9 @@ export interface Engine {
 
   /**
    * Cancel an idle or running run, moving it to errored state.
+   * Active handlers are aborted cooperatively through {@link HandlerContext.signal}
+   * / {@link ProcessContext.signal}, and later engine-mediated context writes and
+   * durable effects are fenced once cancellation takes effect.
    * @param runId - The run's ID.
    * @returns The cancelled run.
    * @throws {@link EngineError} with code {@link ErrorCode.RUN_NOT_FOUND} if the run does not exist.
@@ -810,7 +837,7 @@ export interface Engine {
    * @param payload - Optional additional payload to merge with the stored result payload.
    * @returns The newly created child runs.
    * @throws {@link EngineError} with code {@link ErrorCode.RUN_NOT_FOUND} if the run does not exist.
-   * @throws {@link EngineError} with code {@link ErrorCode.INVALID_RUN_STATE} if the run is not completed, has no triggerEvent, or is not deferred.
+   * @throws {@link EngineError} with code {@link ErrorCode.INVALID_RUN_STATE} if the run is not completed, has no triggerEvent, is not deferred, or no child run was admitted. When no child run is admitted, the run remains deferred.
    */
   resume(runId: string, payload?: unknown): Run[]
 
@@ -818,15 +845,18 @@ export interface Engine {
    * Stop the engine and tear down all internal timers (dispatcher, heartbeat, lease loop).
    * No new events will be accepted after calling this. If a dev server is running, it is
    * also closed. Once stopped, the engine no longer holds the Node.js event loop open.
-   * @param opts - Optional graceful shutdown: `{ graceful: true }` waits for in-flight
-   *   handlers to finish before stopping. `timeoutMs` caps the wait (default: 30000ms).
+   * @param opts - Optional graceful shutdown: `{ graceful: true }` pauses new claims,
+   *   keeps heartbeats alive, and waits for in-flight handlers to finish before stopping.
+   *   Without `graceful`, active handlers are aborted cooperatively before teardown.
+   *   `timeoutMs` caps the wait (default: 30000ms).
    */
   stop(opts?: { graceful?: boolean; timeoutMs?: number }): Promise<void>
 
   /**
    * Wait for all idle and running runs to complete. This is the primary mechanism
    * for script-style usage where you emit events and want to block until all
-   * resulting work (including chained events) finishes before exiting.
+   * engine work (including unrelated runs, chained events, and delayed retries)
+   * finishes before exiting.
    * @param timeoutMs - Maximum time to wait in milliseconds.
    * @throws {@link EngineError} with code {@link ErrorCode.DRAIN_TIMEOUT} if runs don't finish in time.
    */

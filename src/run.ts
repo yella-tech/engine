@@ -1,16 +1,19 @@
 import crypto from 'node:crypto'
 import { getRunStatus, isDeferredRun } from './status.js'
-import type { HandlerResult, ProcessState, Run, RunQueryOptions, RunStatus, RunStore, TimelineEntry } from './types.js'
+import type { HandlerResult, ProcessState, Run, RunCreateRequest, RunQueryOptions, RunStatus, RunStore, TimelineEntry } from './types.js'
 import { VALID_TRANSITIONS } from './types.js'
 
 export function createRunStore(): RunStore {
   const runs = new Map<string, Run>()
+  const emissionReservations = new Set<string>()
+  const activeSingletons = new Map<string, string>()
+  const singletonRunProcesses = new Map<string, string>()
 
   function cloneValue<T>(value: T): T {
     try {
       return structuredClone(value)
     } catch {
-      return value
+      throw new Error('Value could not be cloned')
     }
   }
 
@@ -25,37 +28,52 @@ export function createRunStore(): RunStore {
     }
   }
 
-  function create(
-    processName: string,
-    eventName: string,
-    payload: unknown,
-    parentRunId?: string | null,
-    correlationId?: string,
-    context?: Record<string, unknown>,
-    depth?: number,
-    idempotencyKey?: string | null,
-  ): Run {
-    const id = crypto.randomUUID()
+  function emissionReservationKey(eventName: string, idempotencyKey: string): string {
+    return `${eventName}\u0000${idempotencyKey}`
+  }
+
+  function syncSingletonForStateChange(run: Run, nextState: ProcessState): void {
+    const processName = singletonRunProcesses.get(run.id)
+    if (!processName) return
+
+    const wasActive = run.state === 'idle' || run.state === 'running'
+    const willBeActive = nextState === 'idle' || nextState === 'running'
+
+    if (!wasActive && willBeActive) {
+      const owner = activeSingletons.get(processName)
+      if (owner && owner !== run.id) {
+        throw new Error(`Singleton already active: ${processName}`)
+      }
+      activeSingletons.set(processName, run.id)
+      return
+    }
+
+    if (wasActive && !willBeActive && activeSingletons.get(processName) === run.id) {
+      activeSingletons.delete(processName)
+    }
+  }
+
+  function createStoredRun(id: string, request: RunCreateRequest): Run {
     const now = Date.now()
-    const contextCopy = context ? cloneValue(context) : {}
-    const payloadCopy = cloneValue(payload)
+    const contextCopy = request.context ? cloneValue(request.context) : {}
+    const payloadCopy = cloneValue(request.payload)
 
     const run: Run = {
       id,
-      correlationId: correlationId ?? id,
-      processName,
-      eventName,
+      correlationId: request.correlationId ?? id,
+      processName: request.processName,
+      eventName: request.eventName,
       state: 'idle',
       context: contextCopy,
       payload: payloadCopy,
       result: null,
-      timeline: [{ state: 'idle', timestamp: now, event: eventName, payload: payloadCopy }],
-      parentRunId: parentRunId ?? null,
+      timeline: [{ state: 'idle', timestamp: now, event: request.eventName, payload: payloadCopy }],
+      parentRunId: request.parentRunId ?? null,
       childRunIds: [],
       startedAt: now,
       completedAt: null,
-      depth: depth ?? 0,
-      idempotencyKey: idempotencyKey ?? null,
+      depth: request.depth ?? 0,
+      idempotencyKey: request.idempotencyKey ?? null,
       attempt: 0,
       retryAfter: null,
       leaseOwner: null,
@@ -66,12 +84,102 @@ export function createRunStore(): RunStore {
 
     runs.set(id, run)
 
-    if (parentRunId) {
-      const parent = runs.get(parentRunId)
+    if (request.parentRunId) {
+      const parent = runs.get(request.parentRunId)
       if (parent) parent.childRunIds.push(id)
     }
 
+    return run
+  }
+
+  function create(
+    processName: string,
+    eventName: string,
+    payload: unknown,
+    parentRunId?: string | null,
+    correlationId?: string,
+    context?: Record<string, unknown>,
+    depth?: number,
+    idempotencyKey?: string | null,
+  ): Run {
+    const run = createStoredRun(crypto.randomUUID(), {
+      processName,
+      eventName,
+      payload,
+      parentRunId,
+      correlationId,
+      context,
+      depth,
+      idempotencyKey,
+    })
+
     return cloneRun(run)
+  }
+
+  function createMany(requests: RunCreateRequest[]): Run[] {
+    if (requests.length === 0) return []
+
+    const eventName = requests[0].eventName
+    const idempotencyKey = requests[0].idempotencyKey ?? null
+    const reservationKey = idempotencyKey ? emissionReservationKey(eventName, idempotencyKey) : null
+    if (reservationKey && emissionReservations.has(reservationKey)) {
+      return []
+    }
+
+    const creatable: Array<{ id: string; request: RunCreateRequest }> = []
+    for (const request of requests) {
+      if (request.singleton && activeSingletons.has(request.processName)) {
+        continue
+      }
+      creatable.push({ id: crypto.randomUUID(), request })
+    }
+
+    if (creatable.length === 0) return []
+
+    const createdIds: string[] = []
+    const reservedSingletons: Array<{ processName: string; runId: string }> = []
+    const parentSnapshots = new Map<string, string[]>()
+    let reservedEmission = false
+
+    try {
+      if (reservationKey) {
+        emissionReservations.add(reservationKey)
+        reservedEmission = true
+      }
+
+      for (const { id, request } of creatable) {
+        if (request.singleton) {
+          activeSingletons.set(request.processName, id)
+          singletonRunProcesses.set(id, request.processName)
+          reservedSingletons.push({ processName: request.processName, runId: id })
+        }
+        if (request.parentRunId && !parentSnapshots.has(request.parentRunId)) {
+          parentSnapshots.set(request.parentRunId, [...(runs.get(request.parentRunId)?.childRunIds ?? [])])
+        }
+        createStoredRun(id, request)
+        createdIds.push(id)
+      }
+
+      return createdIds.map((id) => cloneRun(runs.get(id)!))
+    } catch (err) {
+      for (const id of createdIds) {
+        runs.delete(id)
+      }
+      for (const [parentId, childIds] of parentSnapshots) {
+        const parent = runs.get(parentId)
+        if (parent) parent.childRunIds = childIds
+      }
+      for (const { processName, runId } of reservedSingletons) {
+        if (activeSingletons.get(processName) === runId) {
+          activeSingletons.delete(processName)
+        }
+        singletonRunProcesses.delete(runId)
+      }
+      if (reservedEmission && reservationKey) {
+        emissionReservations.delete(reservationKey)
+      }
+      throw err
+    }
   }
 
   function transition(runId: string, state: ProcessState, meta?: { error?: string; event?: string; payload?: unknown }): Run {
@@ -83,10 +191,15 @@ export function createRunStore(): RunStore {
       throw new Error(`Invalid transition: ${run.state} → ${state}`)
     }
 
+    syncSingletonForStateChange(run, state)
     run.state = state
     run.leaseOwner = null
     run.leaseExpiresAt = null
     run.heartbeatAt = null
+    if (state === 'idle' || state === 'running') {
+      run.result = null
+      run.completedAt = null
+    }
 
     const entry: TimelineEntry = { state, timestamp: Date.now() }
     if (meta?.error) entry.error = meta.error
@@ -205,12 +318,13 @@ export function createRunStore(): RunStore {
     return [...runs.values()].filter((r) => r.idempotencyKey === key).map(cloneRun)
   }
 
-  function heartbeat(runId: string, leaseOwner: string, leaseExpiresAt: number): void {
+  function heartbeat(runId: string, leaseOwner: string, leaseExpiresAt: number): boolean {
     const run = runs.get(runId)
-    if (!run) return
-    if (run.state !== 'running' || run.leaseOwner !== leaseOwner) return
+    if (!run) return false
+    if (run.state !== 'running' || run.leaseOwner !== leaseOwner) return false
     run.leaseExpiresAt = leaseExpiresAt
     run.heartbeatAt = Date.now()
+    return true
   }
 
   function reclaimStale(): Run[] {
@@ -294,6 +408,11 @@ export function createRunStore(): RunStore {
     if (prunedIds.size === 0) return []
 
     for (const id of prunedIds) {
+      const singletonProcess = singletonRunProcesses.get(id)
+      if (singletonProcess && activeSingletons.get(singletonProcess) === id) {
+        activeSingletons.delete(singletonProcess)
+      }
+      singletonRunProcesses.delete(id)
       runs.delete(id)
     }
 
@@ -314,6 +433,7 @@ export function createRunStore(): RunStore {
 
   return {
     create,
+    createMany,
     transition,
     setResult,
     updateContext,

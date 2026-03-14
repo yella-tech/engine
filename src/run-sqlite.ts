@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import Database from 'better-sqlite3'
 import { createSqliteEngineObservabilityStore } from './observability-store.js'
 import { isDeferredRun } from './status.js'
-import type { EffectRecord, EffectStore, HandlerResult, ProcessState, Run, RunQueryOptions, RunSortOrder, RunStatus, RunStore, TimelineEntry } from './types.js'
+import type { EffectRecord, EffectStore, HandlerResult, ProcessState, Run, RunCreateRequest, RunQueryOptions, RunSortOrder, RunStatus, RunStore, TimelineEntry } from './types.js'
 import { VALID_TRANSITIONS } from './types.js'
 
 type RunRow = {
@@ -52,6 +52,12 @@ function rowToRun(row: RunRow): Run {
     leaseExpiresAt: row.lease_expires_at,
     heartbeatAt: row.heartbeat_at,
     handlerVersion: row.handler_version,
+  }
+}
+
+class DuplicateEmissionReservationError extends Error {
+  constructor() {
+    super('duplicate emission reservation')
   }
 }
 
@@ -202,6 +208,27 @@ const migrations: ((db: Database.Database) => void)[] = [
       CREATE INDEX idx_engine_observability_errors_created_at ON engine_observability_errors(created_at_ms DESC);
     `)
   },
+  // Migration 9 → 10: atomic emission reservations and singleton claims
+  (db) => {
+    db.exec(`
+      CREATE TABLE run_emissions (
+        event_name        TEXT NOT NULL,
+        idempotency_key   TEXT NOT NULL,
+        created_at        INTEGER NOT NULL,
+        PRIMARY KEY (event_name, idempotency_key)
+      );
+
+      CREATE TABLE run_singleton_meta (
+        run_id            TEXT PRIMARY KEY,
+        process_name      TEXT NOT NULL
+      );
+
+      CREATE TABLE active_singletons (
+        process_name      TEXT PRIMARY KEY,
+        run_id            TEXT NOT NULL UNIQUE
+      );
+    `)
+  },
 ]
 
 function applyMigrations(db: Database.Database) {
@@ -236,10 +263,24 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
       VALUES (@id, @correlation_id, @process_name, @event_name, @state, @context, @payload, @result, @timeline, @parent_run_id, @child_run_ids, @started_at, @completed_at, @depth, @idempotency_key, @attempt, @retry_after, @lease_owner, @lease_expires_at, @heartbeat_at, @handler_version)
     `),
     getById: db.prepare('SELECT * FROM runs WHERE id = ?'),
-    updateState: db.prepare('UPDATE runs SET state = ?, timeline = ?, completed_at = ?, lease_owner = NULL, lease_expires_at = NULL, heartbeat_at = NULL WHERE id = ?'),
+    updateState: db.prepare('UPDATE runs SET state = ?, timeline = ?, completed_at = ?, result = ?, lease_owner = NULL, lease_expires_at = NULL, heartbeat_at = NULL WHERE id = ?'),
     updateResult: db.prepare('UPDATE runs SET result = ? WHERE id = ?'),
     updateContext: db.prepare('UPDATE runs SET context = ? WHERE id = ?'),
     updateChildRunIds: db.prepare('UPDATE runs SET child_run_ids = ? WHERE id = ?'),
+    reserveEmission: db.prepare(`
+      INSERT INTO run_emissions (event_name, idempotency_key, created_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(event_name, idempotency_key) DO NOTHING
+    `),
+    insertSingletonMeta: db.prepare('INSERT INTO run_singleton_meta (run_id, process_name) VALUES (?, ?)'),
+    claimSingleton: db.prepare(`
+      INSERT INTO active_singletons (process_name, run_id)
+      VALUES (?, ?)
+      ON CONFLICT(process_name) DO NOTHING
+    `),
+    getSingletonProcessByRunId: db.prepare('SELECT process_name FROM run_singleton_meta WHERE run_id = ?'),
+    releaseSingletonByRunId: db.prepare('DELETE FROM active_singletons WHERE run_id = ?'),
+    deleteSingletonMetaByRunId: db.prepare('DELETE FROM run_singleton_meta WHERE run_id = ?'),
     getByProcess: db.prepare('SELECT * FROM runs WHERE process_name = ?'),
     getByState: db.prepare('SELECT * FROM runs WHERE state = ?'),
     getAll: db.prepare('SELECT * FROM runs'),
@@ -299,36 +340,46 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     deleteById: db.prepare('DELETE FROM runs WHERE id = ?'),
   }
 
-  function create(
-    processName: string,
-    eventName: string,
-    payload: unknown,
-    parentRunId?: string | null,
-    correlationId?: string,
-    context?: Record<string, unknown>,
-    depth?: number,
-    idempotencyKey?: string | null,
-  ): Run {
-    const id = crypto.randomUUID()
+  function syncSingletonForStateChange(runId: string, currentState: ProcessState, nextState: ProcessState): void {
+    const singletonRow = stmts.getSingletonProcessByRunId.get(runId) as { process_name: string } | undefined
+    if (!singletonRow) return
+
+    const wasActive = currentState === 'idle' || currentState === 'running'
+    const willBeActive = nextState === 'idle' || nextState === 'running'
+
+    if (!wasActive && willBeActive) {
+      const claim = stmts.claimSingleton.run(singletonRow.process_name, runId)
+      if (claim.changes === 0) {
+        throw new Error(`Singleton already active: ${singletonRow.process_name}`)
+      }
+      return
+    }
+
+    if (wasActive && !willBeActive) {
+      stmts.releaseSingletonByRunId.run(runId)
+    }
+  }
+
+  function createStoredRun(id: string, request: RunCreateRequest): Run {
     const now = Date.now()
-    const timeline: TimelineEntry[] = [{ state: 'idle', timestamp: now, event: eventName, payload }]
+    const timeline: TimelineEntry[] = [{ state: 'idle', timestamp: now, event: request.eventName, payload: request.payload }]
 
     const run: Run = {
       id,
-      correlationId: correlationId ?? id,
-      processName,
-      eventName,
+      correlationId: request.correlationId ?? id,
+      processName: request.processName,
+      eventName: request.eventName,
       state: 'idle',
-      context: context ? { ...context } : {},
-      payload,
+      context: request.context ? { ...request.context } : {},
+      payload: request.payload,
       result: null,
       timeline,
-      parentRunId: parentRunId ?? null,
+      parentRunId: request.parentRunId ?? null,
       childRunIds: [],
       startedAt: now,
       completedAt: null,
-      depth: depth ?? 0,
-      idempotencyKey: idempotencyKey ?? null,
+      depth: request.depth ?? 0,
+      idempotencyKey: request.idempotencyKey ?? null,
       attempt: 0,
       retryAfter: null,
       leaseOwner: null,
@@ -361,16 +412,83 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
       handler_version: null,
     })
 
-    if (parentRunId) {
-      const parentRow = stmts.getById.get(parentRunId) as RunRow | undefined
+    if (request.parentRunId) {
+      const parentRow = stmts.getById.get(request.parentRunId) as RunRow | undefined
       if (parentRow) {
         const childIds: string[] = JSON.parse(parentRow.child_run_ids)
         childIds.push(id)
-        stmts.updateChildRunIds.run(JSON.stringify(childIds), parentRunId)
+        stmts.updateChildRunIds.run(JSON.stringify(childIds), request.parentRunId)
       }
     }
 
     return run
+  }
+
+  function create(
+    processName: string,
+    eventName: string,
+    payload: unknown,
+    parentRunId?: string | null,
+    correlationId?: string,
+    context?: Record<string, unknown>,
+    depth?: number,
+    idempotencyKey?: string | null,
+  ): Run {
+    return createStoredRun(crypto.randomUUID(), {
+      processName,
+      eventName,
+      payload,
+      parentRunId,
+      correlationId,
+      context,
+      depth,
+      idempotencyKey,
+    })
+  }
+
+  function createMany(requests: RunCreateRequest[]): Run[] {
+    if (requests.length === 0) return []
+
+    const createManyTransaction = db.transaction((batch: RunCreateRequest[]) => {
+      const creatable: Array<{ id: string; request: RunCreateRequest }> = []
+
+      for (const request of batch) {
+        const id = crypto.randomUUID()
+        if (request.singleton) {
+          const claim = stmts.claimSingleton.run(request.processName, id)
+          if (claim.changes === 0) continue
+          stmts.insertSingletonMeta.run(id, request.processName)
+        }
+        creatable.push({ id, request })
+      }
+
+      if (creatable.length === 0) return []
+
+      const eventName = batch[0].eventName
+      const idempotencyKey = batch[0].idempotencyKey ?? null
+      if (idempotencyKey) {
+        const reservation = stmts.reserveEmission.run(eventName, idempotencyKey, Date.now())
+        if (reservation.changes === 0) {
+          throw new DuplicateEmissionReservationError()
+        }
+      }
+
+      const runs: Run[] = []
+      for (const { id, request } of creatable) {
+        runs.push(createStoredRun(id, request))
+      }
+
+      return runs
+    })
+
+    try {
+      return createManyTransaction(requests)
+    } catch (err) {
+      if (err instanceof DuplicateEmissionReservationError) {
+        return []
+      }
+      throw err
+    }
   }
 
   function transition(runId: string, state: ProcessState, meta?: { error?: string; event?: string; payload?: unknown }): Run {
@@ -383,6 +501,7 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
       throw new Error(`Invalid transition: ${currentState} → ${state}`)
     }
 
+    syncSingletonForStateChange(runId, currentState, state)
     const timeline: TimelineEntry[] = JSON.parse(row.timeline)
     const entry: TimelineEntry = { state, timestamp: Date.now() }
     if (meta?.error) entry.error = meta.error
@@ -390,14 +509,16 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     if (meta?.payload !== undefined) entry.payload = meta.payload
     timeline.push(entry)
 
-    const completedAt = state === 'completed' || state === 'errored' ? Date.now() : row.completed_at
+    const completedAt = state === 'completed' || state === 'errored' ? Date.now() : null
+    const result = state === 'idle' || state === 'running' ? null : row.result
 
-    stmts.updateState.run(state, JSON.stringify(timeline), completedAt, runId)
+    stmts.updateState.run(state, JSON.stringify(timeline), completedAt, result, runId)
 
     return rowToRun({
       ...row,
       state,
       timeline: JSON.stringify(timeline),
+      result,
       completed_at: completedAt,
       lease_owner: null,
       lease_expires_at: null,
@@ -633,6 +754,8 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
       }
 
       for (const runId of prunedIds) {
+        stmts.releaseSingletonByRunId.run(runId)
+        stmts.deleteSingletonMetaByRunId.run(runId)
         stmts.clearParentRunIds.run(runId)
         stmts.deleteById.run(runId)
       }
@@ -647,8 +770,8 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     db.close()
   }
 
-  function heartbeat(runId: string, leaseOwner: string, leaseExpiresAt: number): void {
-    stmts.heartbeat.run(leaseExpiresAt, Date.now(), runId, leaseOwner)
+  function heartbeat(runId: string, leaseOwner: string, leaseExpiresAt: number): boolean {
+    return stmts.heartbeat.run(leaseExpiresAt, Date.now(), runId, leaseOwner).changes > 0
   }
 
   function reclaimStale(): Run[] {
@@ -682,6 +805,7 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
 
   return {
     create,
+    createMany,
     transition,
     setResult,
     updateContext,

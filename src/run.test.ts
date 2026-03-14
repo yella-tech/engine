@@ -61,6 +61,14 @@ describe('createRunStore (memory)', () => {
       expect(fresh.state).toBe('idle')
       expect((fresh.payload as any).nested.x).toBe(1)
     })
+
+    it('rejects uncloneable payloads instead of leaking references', () => {
+      expect(() =>
+        store.create('proc', 'event', {
+          handler: () => 'nope',
+        } as unknown),
+      ).toThrow(/clone/i)
+    })
   })
 
   describe('transition', () => {
