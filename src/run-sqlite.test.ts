@@ -6,6 +6,17 @@ import os from 'node:os'
 import path from 'node:path'
 import Database from 'better-sqlite3'
 
+function downgradeSchemaToV9(dbPath: string): void {
+  const db = new Database(dbPath)
+  db.exec(`
+    DROP TABLE run_emissions;
+    DROP TABLE run_singleton_meta;
+    DROP TABLE active_singletons;
+    PRAGMA user_version = 9;
+  `)
+  db.close()
+}
+
 describe('createSqliteRunStore', () => {
   let store: RunStore
 
@@ -438,7 +449,7 @@ describe('createSqliteRunStore', () => {
       const claimed = store.claimIdle(1, 'owner-1', 30_000)
       const run = claimed[0]
       const newExpiry = Date.now() + 60_000
-      store.heartbeat(run.id, 'owner-1', newExpiry)
+      expect(store.heartbeat(run.id, 'owner-1', newExpiry)).toBe(true)
       const updated = store.get(run.id)!
       expect(updated.leaseExpiresAt).toBe(newExpiry)
       expect(updated.heartbeatAt).toBeGreaterThan(0)
@@ -449,7 +460,7 @@ describe('createSqliteRunStore', () => {
       const claimed = store.claimIdle(1, 'owner-1', 30_000)
       const run = claimed[0]
       const originalExpiry = run.leaseExpiresAt
-      store.heartbeat(run.id, 'wrong-owner', Date.now() + 60_000)
+      expect(store.heartbeat(run.id, 'wrong-owner', Date.now() + 60_000)).toBe(false)
       const updated = store.get(run.id)!
       expect(updated.leaseExpiresAt).toBe(originalExpiry)
     })
@@ -459,7 +470,7 @@ describe('createSqliteRunStore', () => {
       const claimed = store.claimIdle(1, 'owner-1', 30_000)
       const run = claimed[0]
       store.transition(run.id, 'completed')
-      store.heartbeat(run.id, 'owner-1', Date.now() + 60_000)
+      expect(store.heartbeat(run.id, 'owner-1', Date.now() + 60_000)).toBe(false)
       const updated = store.get(run.id)!
       expect(updated.leaseExpiresAt).toBeNull()
     })
@@ -570,6 +581,71 @@ describe('createSqliteRunStore', () => {
         payload: { response: [1, 2, 3] },
         triggerEvent: 'next',
       })
+    })
+  })
+
+  describe('migration 9 -> 10', () => {
+    it('backfills emission reservations from existing run rows', () => {
+      const dbPath = path.join(os.tmpdir(), `run-sqlite-migration-idempotency-${Date.now()}.db`)
+      const legacyStore = createSqliteRunStore(dbPath)
+      legacyStore.create('proc', 'evt', { a: 1 }, null, undefined, undefined, undefined, 'dup-key')
+      legacyStore.close?.()
+      downgradeSchemaToV9(dbPath)
+
+      const migratedStore = createSqliteRunStore(dbPath)
+      const duplicate = migratedStore.createMany([
+        {
+          processName: 'proc',
+          eventName: 'evt',
+          payload: { a: 2 },
+          idempotencyKey: 'dup-key',
+        },
+      ])
+
+      expect(duplicate).toEqual([])
+
+      migratedStore.close?.()
+      try {
+        fs.unlinkSync(dbPath)
+      } catch {}
+      try {
+        fs.unlinkSync(dbPath + '-wal')
+      } catch {}
+      try {
+        fs.unlinkSync(dbPath + '-shm')
+      } catch {}
+    })
+
+    it('preserves singleton admission against legacy active runs', () => {
+      const dbPath = path.join(os.tmpdir(), `run-sqlite-migration-singleton-${Date.now()}.db`)
+      const legacyStore = createSqliteRunStore(dbPath)
+      legacyStore.create('singleton-proc', 'evt', null)
+      legacyStore.claimIdle(1, 'owner-1', 30_000)
+      legacyStore.close?.()
+      downgradeSchemaToV9(dbPath)
+
+      const migratedStore = createSqliteRunStore(dbPath)
+      const duplicate = migratedStore.createMany([
+        {
+          processName: 'singleton-proc',
+          eventName: 'evt',
+          payload: null,
+          singleton: true,
+        },
+      ])
+
+      expect(duplicate).toEqual([])
+
+      migratedStore.close?.()
+      try {
+        fs.unlinkSync(dbPath)
+      } catch {}
+      try {
+        fs.unlinkSync(dbPath + '-wal')
+      } catch {}
+      try {
+        fs.unlinkSync(dbPath + '-shm')
+      } catch {}
     })
   })
 })

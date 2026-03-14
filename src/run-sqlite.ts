@@ -228,6 +228,13 @@ const migrations: ((db: Database.Database) => void)[] = [
         run_id            TEXT NOT NULL UNIQUE
       );
     `)
+    db.exec(`
+      INSERT INTO run_emissions (event_name, idempotency_key, created_at)
+      SELECT event_name, idempotency_key, MIN(started_at)
+      FROM runs
+      WHERE idempotency_key IS NOT NULL
+      GROUP BY event_name, idempotency_key;
+    `)
   },
 ]
 
@@ -455,6 +462,7 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
       for (const request of batch) {
         const id = crypto.randomUUID()
         if (request.singleton) {
+          if (stmts.hasActiveRun.get(request.processName) !== undefined) continue
           const claim = stmts.claimSingleton.run(request.processName, id)
           if (claim.changes === 0) continue
           stmts.insertSingletonMeta.run(id, request.processName)

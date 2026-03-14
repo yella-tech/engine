@@ -289,7 +289,7 @@ describe('createRunStore (memory)', () => {
       const claimed = store.claimIdle(1, 'owner-1', 30_000)
       const run = claimed[0]
       const newExpiry = Date.now() + 60_000
-      store.heartbeat(run.id, 'owner-1', newExpiry)
+      expect(store.heartbeat(run.id, 'owner-1', newExpiry)).toBe(true)
       const updated = store.get(run.id)!
       expect(updated.leaseExpiresAt).toBe(newExpiry)
       expect(updated.heartbeatAt).toBeGreaterThan(0)
@@ -300,7 +300,7 @@ describe('createRunStore (memory)', () => {
       const claimed = store.claimIdle(1, 'owner-1', 30_000)
       const run = claimed[0]
       const originalExpiry = run.leaseExpiresAt
-      store.heartbeat(run.id, 'wrong-owner', Date.now() + 60_000)
+      expect(store.heartbeat(run.id, 'wrong-owner', Date.now() + 60_000)).toBe(false)
       const updated = store.get(run.id)!
       expect(updated.leaseExpiresAt).toBe(originalExpiry)
     })
@@ -310,7 +310,7 @@ describe('createRunStore (memory)', () => {
       const claimed = store.claimIdle(1, 'owner-1', 30_000)
       const run = claimed[0]
       store.transition(run.id, 'completed')
-      store.heartbeat(run.id, 'owner-1', Date.now() + 60_000)
+      expect(store.heartbeat(run.id, 'owner-1', Date.now() + 60_000)).toBe(false)
       const updated = store.get(run.id)!
       expect(updated.leaseExpiresAt).toBeNull()
     })
