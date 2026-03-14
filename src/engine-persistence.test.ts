@@ -2,8 +2,36 @@ import { describe, it, expect, afterEach, beforeEach } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import Database from 'better-sqlite3'
 import { createEngine, ErrorCode } from './index.js'
 import { createSqliteRunStore } from './run-sqlite.js'
+import type { Run } from './types.js'
+
+function forceStaleRunningLease(dbPath: string, run: Run): void {
+  const db = new Database(dbPath)
+  db.prepare(`
+    UPDATE runs
+    SET state = 'running',
+        result = NULL,
+        timeline = ?,
+        completed_at = NULL,
+        attempt = ?,
+        retry_after = ?,
+        lease_owner = ?,
+        lease_expires_at = ?,
+        heartbeat_at = ?
+    WHERE id = ?
+  `).run(
+    JSON.stringify(run.timeline),
+    run.attempt,
+    run.retryAfter,
+    run.leaseOwner,
+    Date.now() - 1,
+    run.heartbeatAt ?? Date.now() - 10,
+    run.id,
+  )
+  db.close()
+}
 
 // ── SQLite restart persistence ──
 
@@ -126,11 +154,9 @@ describe('lease-based crash recovery (SQLite)', () => {
     expect(running[0].leaseOwner).not.toBeNull()
     store1.close!()
 
-    // Hard stop, simulates a crash (no graceful shutdown)
-    engine1.stop()
-
-    // Wait for the lease to expire
-    await new Promise((r) => setTimeout(r, 150))
+    // Stop the engine, then restore the stale running row to simulate a real crash residue.
+    await engine1.stop()
+    forceStaleRunningLease(tmpFile, running[0])
 
     // Engine2: starts up, reclaims the stale run, completes it
     const engine2 = createEngine({
@@ -166,8 +192,11 @@ describe('lease-based crash recovery (SQLite)', () => {
     engine1.emit('evt', null)
 
     await new Promise((r) => setTimeout(r, 50))
-    engine1.stop()
-    await new Promise((r) => setTimeout(r, 150))
+    const store1 = createSqliteRunStore(tmpFile)
+    const [running] = store1.getByState('running')
+    store1.close!()
+    await engine1.stop()
+    forceStaleRunningLease(tmpFile, running)
 
     // Engine2: reclaims, but retry budget exhausted → errored
     const engine2 = createEngine({
@@ -209,8 +238,11 @@ describe('lease-based crash recovery (SQLite)', () => {
     engine1.emit('evt', null)
 
     await new Promise((r) => setTimeout(r, 50))
-    engine1.stop()
-    await new Promise((r) => setTimeout(r, 150))
+    const store1 = createSqliteRunStore(tmpFile)
+    const [running] = store1.getByState('running')
+    store1.close!()
+    await engine1.stop()
+    forceStaleRunningLease(tmpFile, running)
 
     const engine2 = createEngine({
       store: { type: 'sqlite', path: tmpFile },
@@ -247,8 +279,11 @@ describe('lease-based crash recovery (SQLite)', () => {
     const [run1] = engine1.emit('evt', null)
 
     await new Promise((r) => setTimeout(r, 50))
-    engine1.stop()
-    await new Promise((r) => setTimeout(r, 150))
+    const store1 = createSqliteRunStore(tmpFile)
+    const [running] = store1.getByState('running')
+    store1.close!()
+    await engine1.stop()
+    forceStaleRunningLease(tmpFile, running)
 
     const engine2 = createEngine({
       store: { type: 'sqlite', path: tmpFile },

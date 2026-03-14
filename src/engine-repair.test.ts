@@ -52,17 +52,21 @@ function gracefulStopTests(label: string, opts: EngineOptions) {
     it('hard stop (default) does not wait', async () => {
       engine = createEngine({ ...opts, concurrency: 1 })
       let finished = false
+      let runId = ''
       engine.register('slow', 'evt', async () => {
         await new Promise((r) => setTimeout(r, 100))
         finished = true
         return { success: true }
       })
 
-      engine.emit('evt', null)
+      ;[{ id: runId }] = engine.emit('evt', null)
       await new Promise((r) => setTimeout(r, 5))
 
       await engine.stop()
       expect(finished).toBe(false)
+      if (!opts.store) {
+        expect(engine.getRun(runId)?.state).toBe('idle')
+      }
     })
   })
 }
