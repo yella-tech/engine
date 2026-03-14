@@ -44,6 +44,18 @@ describe('createEffectStore (memory)', () => {
     expect(record.completedAt).toBeGreaterThan(0)
   })
 
+  it('clearStartedEffects removes only started records for the run', () => {
+    store.markStarted('run-1', 'started')
+    store.markStarted('run-1', 'will-complete')
+    store.markCompleted('run-1', 'will-complete', 'done')
+    store.markStarted('run-2', 'other-run')
+
+    expect(store.clearStartedEffects('run-1')).toBe(1)
+    expect(store.getEffect('run-1', 'started')).toBeNull()
+    expect(store.getEffect('run-1', 'will-complete')?.state).toBe('completed')
+    expect(store.getEffect('run-2', 'other-run')?.state).toBe('started')
+  })
+
   it('effects are scoped per run', () => {
     store.markStarted('run-1', 'key')
     store.markStarted('run-2', 'key')

@@ -44,6 +44,18 @@ describe('SQLite EffectStore', () => {
     expect(record.error).toBe('timeout')
   })
 
+  it('clearStartedEffects removes only started rows for the run', () => {
+    effectStore.markStarted('run-1', 'started')
+    effectStore.markStarted('run-1', 'will-complete')
+    effectStore.markCompleted('run-1', 'will-complete', 'done')
+    effectStore.markStarted('run-2', 'other-run')
+
+    expect(effectStore.clearStartedEffects('run-1')).toBe(1)
+    expect(effectStore.getEffect('run-1', 'started')).toBeNull()
+    expect(effectStore.getEffect('run-1', 'will-complete')?.state).toBe('completed')
+    expect(effectStore.getEffect('run-2', 'other-run')?.state).toBe('started')
+  })
+
   it('effects scoped per run', () => {
     effectStore.markStarted('run-1', 'key')
     effectStore.markStarted('run-2', 'key')

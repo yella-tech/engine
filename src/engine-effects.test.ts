@@ -159,6 +159,46 @@ function effectTests(storeType: string, engineOpts: EngineOptions) {
       expect(engine.getEffects(completed.id)).toHaveLength(0)
       expect(engine.getRun(deferred.id)).not.toBeNull()
     })
+
+    it('retryRun clears started effects so a cancelled run can be repaired', async () => {
+      let effectCalls = 0
+      let releaseFirstEffect!: () => void
+      const firstEffectBlocked = new Promise<void>((resolve) => {
+        releaseFirstEffect = resolve
+      })
+      let blockFirstAttempt = true
+
+      engine = createEngine({ ...engineOpts, retry: { maxRetries: 0, delay: 0 } })
+      engine.register('proc', 'evt', async (ctx) => {
+        const value = await ctx.effect('charge', async () => {
+          effectCalls++
+          if (blockFirstAttempt) {
+            await firstEffectBlocked
+          }
+          return { chargeId: `ch_${effectCalls}` }
+        })
+        return { success: true, payload: value }
+      })
+
+      const [run] = engine.emit('evt', null)
+      await new Promise((r) => setTimeout(r, 10))
+      engine.cancelRun(run.id)
+
+      expect(engine.getRun(run.id)?.state).toBe('errored')
+      expect(engine.getEffects(run.id)[0]?.state).toBe('started')
+
+      blockFirstAttempt = false
+      releaseFirstEffect()
+
+      engine.retryRun(run.id)
+      await engine.drain()
+
+      const repaired = engine.getRun(run.id)!
+      expect(repaired.state).toBe('completed')
+      expect(repaired.result?.payload).toEqual({ chargeId: 'ch_2' })
+      expect(engine.getEffects(run.id)[0]?.state).toBe('completed')
+      expect(effectCalls).toBe(2)
+    })
   })
 }
 

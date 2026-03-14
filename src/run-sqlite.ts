@@ -882,6 +882,7 @@ function createSqliteEffectStore(db: Database.Database): EffectStore {
     `),
     markCompleted: db.prepare("UPDATE run_effects SET state='completed', output=?, completed_at=? WHERE run_id=? AND effect_key=?"),
     markFailed: db.prepare("UPDATE run_effects SET state='failed', error=?, completed_at=? WHERE run_id=? AND effect_key=?"),
+    clearStartedByRunId: db.prepare("DELETE FROM run_effects WHERE run_id = ? AND state = 'started'"),
     deleteByRunId: db.prepare('DELETE FROM run_effects WHERE run_id = ?'),
   }
 
@@ -924,6 +925,10 @@ function createSqliteEffectStore(db: Database.Database): EffectStore {
     stmts.markFailed.run(error, Date.now(), runId, effectKey)
   }
 
+  function clearStartedEffects(runId: string): number {
+    return stmts.clearStartedByRunId.run(runId).changes
+  }
+
   function getEffects(runId: string): EffectRecord[] {
     const rows = stmts.getAll.all(runId) as EffectRow[]
     return rows.map(rowToEffect)
@@ -938,7 +943,7 @@ function createSqliteEffectStore(db: Database.Database): EffectStore {
     return deleted
   }
 
-  return { getEffect, getEffects, markStarted, markCompleted, markFailed, deleteEffectsForRuns }
+  return { getEffect, getEffects, markStarted, markCompleted, markFailed, clearStartedEffects, deleteEffectsForRuns }
 }
 
 export function createSqliteStores(dbPath: string): { runStore: RunStore; effectStore: EffectStore; observabilityStore: ReturnType<typeof createSqliteEngineObservabilityStore>; close: () => void } {

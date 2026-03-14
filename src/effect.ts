@@ -41,6 +41,20 @@ export function createEffectStore(): EffectStore {
     return inner ? Array.from(inner.values()) : []
   }
 
+  function clearStartedEffects(runId: string): number {
+    const inner = effects.get(runId)
+    if (!inner) return 0
+
+    let cleared = 0
+    for (const [effectKey, effect] of inner.entries()) {
+      if (effect.state !== 'started') continue
+      inner.delete(effectKey)
+      cleared++
+    }
+    if (inner.size === 0) effects.delete(runId)
+    return cleared
+  }
+
   function deleteEffectsForRuns(runIds: string[]): number {
     let deleted = 0
     for (const runId of runIds) {
@@ -52,5 +66,5 @@ export function createEffectStore(): EffectStore {
     return deleted
   }
 
-  return { getEffect, getEffects, markStarted, markCompleted, markFailed, deleteEffectsForRuns }
+  return { getEffect, getEffects, markStarted, markCompleted, markFailed, clearStartedEffects, deleteEffectsForRuns }
 }

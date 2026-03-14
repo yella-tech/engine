@@ -422,6 +422,8 @@ export type EffectStore = {
   markCompleted(runId: string, effectKey: string, output: unknown): void
   /** Mark an effect as failed and persist the error message. */
   markFailed(runId: string, effectKey: string, error: string): void
+  /** Clear any in-progress (`started`) effects for a run so operators can repair and retry it. Returns the number removed. */
+  clearStartedEffects(runId: string): number
   /** Delete all effect records for the given run IDs. Returns the number of records removed. */
   deleteEffectsForRuns(runIds: string[]): number
 }
@@ -656,6 +658,17 @@ export interface Engine {
    * @param name - The process name to unregister.
    */
   unregister(name: string): void
+
+  /**
+   * Start recovery and dispatch after registration is complete.
+   *
+   * This is primarily relevant for persisted stores: call it after asynchronous
+   * registration so recovered work is not consumed before its handlers exist.
+   * Methods like {@link emit}, {@link emitAndWait}, {@link drain},
+   * {@link retryRun}, {@link requeueDead}, and {@link resume} also start the
+   * runtime automatically if needed.
+   */
+  start(): void
 
   /**
    * Emit an event, creating runs for all registered processes.
