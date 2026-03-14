@@ -409,7 +409,7 @@ describe('createRunStore (memory)', () => {
       vi.useRealTimers()
     })
 
-    it('prunes completed non-deferred runs and reparents surviving children', () => {
+    it('does not prune completed runs that still anchor surviving descendants', () => {
       const parent = store.create('parent', 'evt', null)
       store.transition(parent.id, 'running')
       store.setResult(parent.id, { success: true })
@@ -425,11 +425,31 @@ describe('createRunStore (memory)', () => {
       const child = store.create('child', 'evt', null, parent.id)
       const pruned = store.pruneCompletedBefore!(Date.now() - 50)
 
-      expect(pruned).toContain(parent.id)
+      expect(pruned).not.toContain(parent.id)
       expect(pruned).not.toContain(deferred.id)
-      expect(store.get(parent.id)).toBeNull()
+      expect(store.get(parent.id)).not.toBeNull()
       expect(store.get(deferred.id)).not.toBeNull()
-      expect(store.get(child.id)?.parentRunId).toBeNull()
+      expect(store.get(child.id)?.parentRunId).toBe(parent.id)
+    })
+
+    it('prunes completed chains when every descendant is also prunable', () => {
+      const parent = store.create('parent', 'evt', null)
+      store.transition(parent.id, 'running')
+      store.setResult(parent.id, { success: true })
+      store.transition(parent.id, 'completed')
+
+      const child = store.create('child', 'evt', null, parent.id)
+      store.transition(child.id, 'running')
+      store.setResult(child.id, { success: true })
+      store.transition(child.id, 'completed')
+
+      vi.advanceTimersByTime(100)
+
+      const pruned = store.pruneCompletedBefore!(Date.now() - 50)
+      expect(pruned).toContain(parent.id)
+      expect(pruned).toContain(child.id)
+      expect(store.get(parent.id)).toBeNull()
+      expect(store.get(child.id)).toBeNull()
     })
   })
 })

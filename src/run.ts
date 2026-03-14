@@ -395,17 +395,39 @@ export function createRunStore(): RunStore {
 
   function pruneCompletedBefore(cutoffMs: number): string[] {
     const prunedIds = new Set<string>()
-    const impactedParentIds = new Set<string>()
-
     for (const [id, run] of runs.entries()) {
       if (run.state !== 'completed' || run.completedAt === null || run.completedAt >= cutoffMs || isDeferredRun(run)) {
         continue
       }
       prunedIds.add(id)
-      if (run.parentRunId) impactedParentIds.add(run.parentRunId)
     }
 
     if (prunedIds.size === 0) return []
+
+    let changed = true
+    while (changed) {
+      changed = false
+      for (const id of Array.from(prunedIds)) {
+        const run = runs.get(id)
+        if (!run) {
+          prunedIds.delete(id)
+          changed = true
+          continue
+        }
+        if (run.childRunIds.some((childId) => !prunedIds.has(childId))) {
+          prunedIds.delete(id)
+          changed = true
+        }
+      }
+    }
+
+    if (prunedIds.size === 0) return []
+
+    const impactedParentIds = new Set<string>()
+    for (const id of prunedIds) {
+      const run = runs.get(id)
+      if (run?.parentRunId) impactedParentIds.add(run.parentRunId)
+    }
 
     for (const id of prunedIds) {
       const singletonProcess = singletonRunProcesses.get(id)

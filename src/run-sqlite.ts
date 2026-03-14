@@ -751,8 +751,32 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
       const candidates = candidateRows.map(rowToRun).filter((run) => !isDeferredRun(run))
       if (candidates.length === 0) return []
 
-      const prunedIds = new Set(candidates.map((run) => run.id))
-      const impactedParentIds = new Set(candidates.map((run) => run.parentRunId).filter((id): id is string => id !== null))
+      const candidateById = new Map(candidates.map((run) => [run.id, run]))
+      const prunedIds = new Set(candidateById.keys())
+      let changed = true
+      while (changed) {
+        changed = false
+        for (const id of Array.from(prunedIds)) {
+          const run = candidateById.get(id)
+          if (!run) {
+            prunedIds.delete(id)
+            changed = true
+            continue
+          }
+          if (run.childRunIds.some((childId) => !prunedIds.has(childId))) {
+            prunedIds.delete(id)
+            changed = true
+          }
+        }
+      }
+
+      if (prunedIds.size === 0) return []
+
+      const impactedParentIds = new Set(
+        Array.from(prunedIds)
+          .map((id) => candidateById.get(id)?.parentRunId ?? null)
+          .filter((id): id is string => id !== null),
+      )
 
       for (const parentId of impactedParentIds) {
         const parentRow = stmts.getById.get(parentId) as RunRow | undefined
