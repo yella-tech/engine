@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { createEngine, VALID_TRANSITIONS } from './index.js'
+import { createEngine, ErrorCode, VALID_TRANSITIONS } from './index.js'
 import type { EngineOptions, ProcessState } from './types.js'
 import { createRunStore } from './run.js'
 import { createSqliteRunStore } from './run-sqlite.js'
@@ -116,7 +116,7 @@ describe('chain depth limit', () => {
         expect(engine.getErrored()).toHaveLength(0)
       })
 
-      it('rejects child beyond max depth, child is never created', async () => {
+      it('errors the parent when a triggered child would exceed max depth', async () => {
         engine = createEngine({ ...opts, maxChainDepth: 1 })
         engine.register('step0', 'e0', async () => ({ success: true, triggerEvent: 'e1' }))
         engine.register('step1', 'e1', async () => ({ success: true, triggerEvent: 'e2' }))
@@ -125,15 +125,15 @@ describe('chain depth limit', () => {
         const [root] = engine.emit('e0', null)
         await engine.drain()
 
-        // step0 completes (depth 0), step1 runs at depth 1 (== maxChainDepth)
-        // step1 triggers e2, but child depth would be 2 > maxChainDepth=1
-        // step1 already completed before enqueue, so it stays completed
-        // step2 is never created
         const completed = engine.getCompleted()
-        expect(completed).toHaveLength(2) // step0 and step1
-        expect(completed.map((r) => r.processName).sort()).toEqual(['step0', 'step1'])
+        expect(completed).toHaveLength(1)
+        expect(completed[0].processName).toBe('step0')
 
-        // step2 was never created
+        const errored = engine.getErrored()
+        expect(errored).toHaveLength(1)
+        expect(errored[0].processName).toBe('step1')
+        expect(errored[0].result?.errorCode).toBe(ErrorCode.CHAIN_DEPTH_EXCEEDED)
+
         const chain = engine.getChain(root.id)
         expect(chain).toHaveLength(2)
       })

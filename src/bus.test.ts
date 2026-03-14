@@ -216,7 +216,7 @@ describe('createBus', () => {
       expect(childRun.context).toEqual({ persisted: { count: 1 } })
     })
 
-    it('triggerEvent with no matching handler produces no child runs and no error', async () => {
+    it('triggerEvent with no matching handler errors the parent run', async () => {
       registry.register('proc', 'evt', async () => ({
         success: true,
         triggerEvent: 'nonexistent',
@@ -227,8 +227,9 @@ describe('createBus', () => {
       await bus.executeRun(run)
 
       const finished = store.get(run.id)!
-      expect(finished.state).toBe('completed')
+      expect(finished.state).toBe('errored')
       expect(finished.childRunIds).toHaveLength(0)
+      expect(finished.result?.error).toContain('Trigger event was not admitted')
     })
 
     it('fences context updates after lease ownership changes', async () => {

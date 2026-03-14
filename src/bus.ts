@@ -213,10 +213,6 @@ export function createBus(registry: Registry, runStore: RunStore, opts: BusOptio
     } else {
       opts.emitEvent({ type: 'run:error', run: finished, error: result.error ?? 'unknown', durationMs })
     }
-
-    if (result.success && result.triggerEvent && !result.deferred) {
-      enqueue(result.triggerEvent, result.payload, run.id, run.correlationId, finished.context)
-    }
   }
 
   function finalizeError(run: Run, err: unknown, def: ProcessDefinition, durationMs: number) {
@@ -268,6 +264,19 @@ export function createBus(registry: Registry, runStore: RunStore, opts: BusOptio
       const current = runStore.get(run.id)
       if (!current || current.state !== 'running') return
       if (opts.leaseOwner && current.leaseOwner !== opts.leaseOwner) return
+
+      if (result.success && result.triggerEvent && !result.deferred) {
+        const childRuns = enqueue(result.triggerEvent, result.payload, run.id, run.correlationId, current.context)
+        const currentAfterEnqueue = runStore.get(run.id)
+        if (!currentAfterEnqueue || currentAfterEnqueue.state !== 'running') return
+        if (childRuns.length === 0) {
+          const error = `Trigger event was not admitted: ${result.triggerEvent}`
+          runStore.setResult(run.id, { success: false, error, errorCode: ErrorCode.INVALID_RUN_STATE })
+          runStore.transition(run.id, 'errored', { error, event: 'child-admission-failed' })
+          opts.emitEvent({ type: 'run:error', run: runStore.get(run.id)!, error, durationMs })
+          return
+        }
+      }
 
       checkPayloadSize(result.payload)
       finalizeSuccess(run, result, durationMs)
