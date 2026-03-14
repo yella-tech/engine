@@ -2,6 +2,7 @@ import type { Run, RunStore } from './types.js'
 
 export type Dispatcher = {
   kick(): void
+  pause(): void
   stop(): void
   onDrain(fn: () => void): void
   waitForActive(): Promise<void>
@@ -19,11 +20,13 @@ export function createDispatcher(
   concurrency: number,
   leaseOpts?: LeaseOpts,
   onInternalError?: (error: unknown, context: string) => void,
+  abortRun?: (runId: string, message: string) => void,
 ): Dispatcher {
   let active = 0
-  let stopped = false
+  let paused = false
   let drainFns: (() => void)[] = []
   const heartbeatTimers = new Map<string, ReturnType<typeof setInterval>>()
+  const scheduledTimers = new Set<ReturnType<typeof setTimeout>>()
   let backoffMs = 0
   const MAX_BACKOFF = 30_000
 
@@ -37,8 +40,24 @@ export function createDispatcher(
     }
   }
 
+  function schedule(delayMs: number, fn: () => void) {
+    const timer = setTimeout(() => {
+      scheduledTimers.delete(timer)
+      fn()
+    }, delayMs)
+    scheduledTimers.add(timer)
+    return timer
+  }
+
+  function clearScheduledTimers() {
+    for (const timer of scheduledTimers) {
+      clearTimeout(timer)
+    }
+    scheduledTimers.clear()
+  }
+
   function fillSlots() {
-    if (stopped) return
+    if (paused) return
 
     try {
       while (active < concurrency) {
@@ -49,12 +68,16 @@ export function createDispatcher(
         active++
         const runId = claimed[0].id
 
-        // Start heartbeat interval if lease is configured
         if (leaseOpts) {
           const opts = leaseOpts
           const timer = setInterval(() => {
             try {
-              runStore.heartbeat(runId, opts.leaseOwner, Date.now() + opts.leaseTimeoutMs)
+              const renewed = runStore.heartbeat(runId, opts.leaseOwner, Date.now() + opts.leaseTimeoutMs)
+              if (!renewed) {
+                clearInterval(timer)
+                heartbeatTimers.delete(runId)
+                abortRun?.(runId, 'run lease lost')
+              }
             } catch (err) {
               onInternalError?.(err, 'heartbeat')
             }
@@ -63,7 +86,6 @@ export function createDispatcher(
         }
 
         executeRun(claimed[0]).finally(() => {
-          // Clear heartbeat timer
           const timer = heartbeatTimers.get(runId)
           if (timer) {
             clearInterval(timer)
@@ -72,23 +94,23 @@ export function createDispatcher(
 
           active--
 
-          // Schedule delayed retry if run was re-queued with a future retryAfter
-          try {
-            const finished = runStore.get(runId)
-            if (finished && finished.state === 'idle' && finished.retryAfter !== null) {
-              const delayMs = Math.max(0, finished.retryAfter - Date.now())
-              if (delayMs > 0) {
-                setTimeout(() => {
-                  if (!stopped) fillSlots()
-                }, delayMs)
+          if (!paused) {
+            try {
+              const finished = runStore.get(runId)
+              if (finished && finished.state === 'idle' && finished.retryAfter !== null) {
+                const delayMs = Math.max(0, finished.retryAfter - Date.now())
+                if (delayMs > 0) {
+                  schedule(delayMs, () => {
+                    if (!paused) fillSlots()
+                  })
+                }
               }
+            } catch (err) {
+              onInternalError?.(err, 'retrySchedule')
             }
-          } catch (err) {
-            onInternalError?.(err, 'retrySchedule')
           }
 
-          if (stopped) {
-            // Graceful stop: still notify drain waiters, just don't claim more work
+          if (paused) {
             if (active === 0) {
               const fns = drainFns
               drainFns = []
@@ -96,6 +118,7 @@ export function createDispatcher(
             }
             return
           }
+
           try {
             const noIdle = runStore.hasState ? !runStore.hasState('idle') : runStore.getByState('idle').length === 0
             if (active === 0 && noIdle) {
@@ -112,9 +135,9 @@ export function createDispatcher(
     } catch (err) {
       onInternalError?.(err, 'fillSlots')
       backoffMs = Math.min(MAX_BACKOFF, Math.max(1000, backoffMs * 2))
-      setTimeout(() => {
-        if (!stopped) fillSlots()
-      }, backoffMs)
+      schedule(backoffMs, () => {
+        if (!paused) fillSlots()
+      })
     }
   }
 
@@ -122,8 +145,13 @@ export function createDispatcher(
     fillSlots()
   }
 
+  function pause() {
+    paused = true
+  }
+
   function stop() {
-    stopped = true
+    paused = true
+    clearScheduledTimers()
     for (const timer of heartbeatTimers.values()) {
       clearInterval(timer)
     }
@@ -141,5 +169,5 @@ export function createDispatcher(
     })
   }
 
-  return { kick, stop, onDrain, waitForActive }
+  return { kick, pause, stop, onDrain, waitForActive }
 }

@@ -53,6 +53,58 @@ describe('createBus', () => {
       expect(runs).toHaveLength(2)
       expect(runs.map((r) => r.processName).sort()).toEqual(['a', 'b'])
     })
+
+    it('same idempotency key on different events does not collide', () => {
+      registry.register('proc-a', 'evt-a', async () => ({ success: true }))
+      registry.register('proc-b', 'evt-b', async () => ({ success: true }))
+
+      const first = bus.enqueue('evt-a', 'a', null, undefined, undefined, 'shared-key')
+      const second = bus.enqueue('evt-b', 'b', null, undefined, undefined, 'shared-key')
+
+      expect(first).toHaveLength(1)
+      expect(second).toHaveLength(1)
+      expect(store.getAll()).toHaveLength(2)
+    })
+
+    it('duplicate idempotent fan-out creates the batch once and the retry no-ops', () => {
+      registry.register('a', 'evt', async () => ({ success: true }))
+      registry.register('b', 'evt', async () => ({ success: true }))
+
+      const first = bus.enqueue('evt', null, null, undefined, undefined, 'batch-key')
+      const second = bus.enqueue('evt', null, null, undefined, undefined, 'batch-key')
+
+      expect(first).toHaveLength(2)
+      expect(second).toEqual([])
+      expect(store.getAll()).toHaveLength(2)
+    })
+
+    it('does not rely on stale hasActiveRun reads for singleton admission', () => {
+      const baseStore = createRunStore()
+      const originalCreate = baseStore.create
+      const staleStore: RunStore = {
+        ...baseStore,
+        hasActiveRun: () => false,
+        create(...args) {
+          return originalCreate(...args)
+        },
+      }
+
+      const staleBus = createBus(registry, staleStore, {
+        maxChainDepth: 10,
+        maxPayloadBytes: 1_048_576,
+        handlerTimeoutMs: 30_000,
+        emitEvent: () => {},
+      })
+
+      registry.register('singleton-proc', 'evt', async () => ({ success: true }), { singleton: true })
+
+      const first = staleBus.enqueue('evt', 'a')
+      const second = staleBus.enqueue('evt', 'b')
+
+      expect(first).toHaveLength(1)
+      expect(second).toHaveLength(0)
+      expect(staleStore.getAll()).toHaveLength(1)
+    })
   })
 
   describe('executeRun', () => {
@@ -157,6 +209,89 @@ describe('createBus', () => {
       const finished = store.get(run.id)!
       expect(finished.state).toBe('completed')
       expect(finished.childRunIds).toHaveLength(0)
+    })
+
+    it('fences context updates after lease ownership changes', async () => {
+      const baseStore = createRunStore()
+      let leaseLost = false
+      const leasedStore: RunStore = {
+        ...baseStore,
+        get(runId: string) {
+          const run = baseStore.get(runId)
+          if (!run) return null
+          if (leaseLost && run.state === 'running') {
+            return { ...run, leaseOwner: 'owner-2' }
+          }
+          return run
+        },
+      }
+      const leasedBus = createBus(registry, leasedStore, {
+        maxChainDepth: 10,
+        maxPayloadBytes: 1_048_576,
+        handlerTimeoutMs: 30_000,
+        leaseOwner: 'owner-1',
+        emitEvent: () => {},
+      })
+
+      let releaseHandler!: () => void
+      const handlerReady = new Promise<void>((resolve) => {
+        releaseHandler = resolve
+      })
+
+      registry.register('proc', 'evt', async (ctx) => {
+        await handlerReady
+        ctx.setContext('unsafe', true)
+        return { success: true }
+      })
+
+      const [run] = leasedBus.enqueue('evt', null)
+      const [claimed] = leasedStore.claimIdle(1, 'owner-1', 30_000)
+      const execution = leasedBus.executeRun(claimed)
+
+      leaseLost = true
+      releaseHandler()
+      await execution
+
+      const stored = baseStore.get(run.id)!
+      expect(stored.context.unsafe).toBeUndefined()
+      expect(stored.result).toBeNull()
+      expect(stored.state).toBe('running')
+    })
+
+    it('does not finalize a handler result after lease ownership changes', async () => {
+      const baseStore = createRunStore()
+      let leaseLost = false
+      const leasedStore: RunStore = {
+        ...baseStore,
+        get(runId: string) {
+          const run = baseStore.get(runId)
+          if (!run) return null
+          if (leaseLost && run.state === 'running') {
+            return { ...run, leaseOwner: 'owner-2' }
+          }
+          return run
+        },
+      }
+      const leasedBus = createBus(registry, leasedStore, {
+        maxChainDepth: 10,
+        maxPayloadBytes: 1_048_576,
+        handlerTimeoutMs: 30_000,
+        leaseOwner: 'owner-1',
+        emitEvent: () => {},
+      })
+
+      registry.register('proc', 'evt', async () => {
+        leaseLost = true
+        return { success: true, payload: 'done' }
+      })
+
+      const [run] = leasedBus.enqueue('evt', null)
+      const [claimed] = leasedStore.claimIdle(1, 'owner-1', 30_000)
+      await leasedBus.executeRun(claimed)
+
+      const stored = baseStore.get(run.id)!
+      expect(stored.result).toBeNull()
+      expect(stored.state).toBe('running')
     })
   })
 })
@@ -281,5 +416,36 @@ describe('createDispatcher', () => {
     await drained
     // If we get here, drain fired
     expect(store.getByState('completed')).toHaveLength(1)
+  })
+
+  it('aborts an in-flight run when heartbeat loses the lease', async () => {
+    store.create('p', 'e', null)
+
+    let resolveRun!: () => void
+    const executeRun = vi.fn(
+      (run: Run) =>
+        new Promise<void>((resolve) => {
+          resolveRun = () => {
+            store.transition(run.id, 'completed')
+            resolve()
+          }
+        }),
+    )
+    const heartbeat = vi.fn(() => false)
+    const abortRun = vi.fn()
+    const leasedStore: RunStore = {
+      ...store,
+      heartbeat,
+    }
+
+    const dispatcher = createDispatcher(leasedStore, executeRun, 1, { leaseOwner: 'owner-1', leaseTimeoutMs: 30_000, heartbeatIntervalMs: 5 }, undefined, abortRun)
+    dispatcher.kick()
+
+    await new Promise((r) => setTimeout(r, 20))
+    expect(abortRun).toHaveBeenCalledTimes(1)
+    expect(abortRun).toHaveBeenCalledWith(expect.any(String), 'run lease lost')
+
+    resolveRun()
+    await dispatcher.waitForActive()
   })
 })

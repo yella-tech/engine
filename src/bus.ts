@@ -2,16 +2,31 @@ import type { Registry } from './registry.js'
 import { EngineError, ErrorCode } from './types.js'
 import type { EffectStore, EngineEvent, HandlerContext, HandlerResult, ProcessDefinition, RetryPolicy, Run, RunStore } from './types.js'
 
+type AbortKind = 'cancel' | 'lease' | 'stop' | 'timeout'
+
+class RunAbortError extends Error {
+  constructor(
+    public readonly kind: AbortKind,
+    message: string,
+    public readonly code?: ErrorCode,
+  ) {
+    super(message)
+  }
+}
+
 export type BusOptions = {
   maxChainDepth: number
   maxPayloadBytes: number
   handlerTimeoutMs: number
+  leaseOwner?: string
   effectStore?: EffectStore
   defaultRetry?: RetryPolicy
   emitEvent: (event: EngineEvent) => void
 }
 
 export function createBus(registry: Registry, runStore: RunStore, opts: BusOptions) {
+  const executionControllers = new Map<string, AbortController>()
+
   function checkPayloadSize(payload: unknown) {
     if (payload !== undefined) {
       const serialized = JSON.stringify(payload)
@@ -22,21 +37,14 @@ export function createBus(registry: Registry, runStore: RunStore, opts: BusOptio
   }
 
   function enqueue(eventName: string, payload: unknown, parentRunId?: string | null, correlationId?: string, parentContext?: Record<string, unknown>, idempotencyKey?: string): Run[] {
-    // Idempotency key check: no new runs created for duplicate key
-    if (idempotencyKey && runStore.hasIdempotencyKey(idempotencyKey)) {
-      return []
-    }
-
     checkPayloadSize(payload)
 
-    // Chain depth check
     let parentDepth = -1
     if (parentRunId) {
       const parent = runStore.get(parentRunId)
       if (parent) {
         parentDepth = parent.depth
         if (parentDepth + 1 > opts.maxChainDepth) {
-          // Only error the parent if it's still running (not already completed)
           if (parent.state === 'running') {
             runStore.setResult(parentRunId, { success: false, error: 'max chain depth exceeded', errorCode: ErrorCode.CHAIN_DEPTH_EXCEEDED })
             runStore.transition(parentRunId, 'errored', { error: 'max chain depth exceeded' })
@@ -50,23 +58,19 @@ export function createBus(registry: Registry, runStore: RunStore, opts: BusOptio
     if (definitions.length === 0) return []
 
     const childDepth = parentDepth + 1
-    const runs: Run[] = []
-    for (const def of definitions) {
-      if (def.singleton && runStore.hasActiveRun(def.name)) continue
-
-      try {
-        const run = runStore.create(def.name, eventName, payload, parentRunId, correlationId, parentContext, childDepth, idempotencyKey ?? null)
-        runs.push(run)
-      } catch (err) {
-        // Cross-process race: another process already created a run with this idempotency key.
-        // The UNIQUE constraint on (idempotency_key, process_name) caught it.
-        if (idempotencyKey && err instanceof Error && err.message.includes('UNIQUE constraint failed')) {
-          return []
-        }
-        throw err
-      }
-    }
-    return runs
+    return runStore.createMany(
+      definitions.map((def) => ({
+        processName: def.name,
+        eventName,
+        payload,
+        parentRunId,
+        correlationId,
+        context: parentContext,
+        depth: childDepth,
+        idempotencyKey: idempotencyKey ?? null,
+        singleton: def.singleton === true,
+      })),
+    )
   }
 
   function resolveHandler(run: Run): ProcessDefinition | null {
@@ -97,38 +101,62 @@ export function createBus(registry: Registry, runStore: RunStore, opts: BusOptio
     }
   }
 
-  function buildContext(run: Run, handlerPayload: unknown): HandlerContext {
+  function abortedReason(signal: AbortSignal): Error {
+    if (signal.reason instanceof Error) return signal.reason
+    return new RunAbortError('stop', 'run aborted')
+  }
+
+  function buildContext(run: Run, handlerPayload: unknown, signal: AbortSignal): HandlerContext {
     const freshRun = runStore.get(run.id)!
     const runContext = structuredClone(freshRun.context)
+
+    function ensureActive(): void {
+      if (signal.aborted) throw abortedReason(signal)
+      const current = runStore.get(run.id)
+      if (!current || current.state !== 'running') {
+        throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Run is no longer running: ${run.id}`)
+      }
+      if (opts.leaseOwner && current.leaseOwner !== opts.leaseOwner) {
+        throw new RunAbortError('lease', `Run lease lost: ${run.id}`)
+      }
+    }
 
     return {
       event: run.eventName,
       payload: handlerPayload,
       runId: run.id,
       correlationId: run.correlationId,
+      signal,
       context: runContext,
       setContext(key, value) {
+        ensureActive()
         runContext[key] = value
         runStore.updateContext(run.id, key, value)
       },
       async effect<R>(effectKey: string, fn: () => Promise<R> | R): Promise<R> {
-        if (!opts.effectStore) return fn() as Promise<R>
+        ensureActive()
+
+        if (!opts.effectStore) return Promise.resolve(fn()) as Promise<R>
 
         const existing = opts.effectStore.getEffect(run.id, effectKey)
         if (existing && existing.state === 'completed') {
           opts.emitEvent({ type: 'effect:replay', runId: run.id, effectKey })
           return existing.output as R
         }
+        if (existing && existing.state === 'started') {
+          throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Effect already in progress: ${effectKey}`)
+        }
 
-        // started or no record, (re-)execute
         opts.effectStore.markStarted(run.id, effectKey)
         const effectStart = Date.now()
         try {
           const result = await fn()
+          ensureActive()
           opts.effectStore.markCompleted(run.id, effectKey, result)
           opts.emitEvent({ type: 'effect:complete', runId: run.id, effectKey, durationMs: Date.now() - effectStart })
           return result
         } catch (err) {
+          if (signal.aborted) throw abortedReason(signal)
           const error = err instanceof Error ? err.message : String(err)
           opts.effectStore.markFailed(run.id, effectKey, error)
           opts.emitEvent({ type: 'effect:error', runId: run.id, effectKey, error, durationMs: Date.now() - effectStart })
@@ -138,17 +166,39 @@ export function createBus(registry: Registry, runStore: RunStore, opts: BusOptio
     }
   }
 
-  async function invokeHandler(def: ProcessDefinition, ctx: HandlerContext) {
+  async function invokeHandler(def: ProcessDefinition, ctx: HandlerContext, controller: AbortController) {
+    const handlerPromise = Promise.resolve(def.handler(ctx))
+
+    let onAbort: (() => void) | undefined
+    const abortPromise = new Promise<never>((_, reject) => {
+      onAbort = () => reject(abortedReason(controller.signal))
+      if (controller.signal.aborted) {
+        onAbort()
+      } else {
+        controller.signal.addEventListener('abort', onAbort, { once: true })
+      }
+    })
+
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const raceEntries: Array<Promise<HandlerResult> | Promise<never>> = [handlerPromise, abortPromise]
     if (opts.handlerTimeoutMs > 0 && opts.handlerTimeoutMs < Infinity) {
-      let timer: ReturnType<typeof setTimeout>
-      return Promise.race([
-        Promise.resolve(def.handler(ctx)).finally(() => clearTimeout(timer)),
+      raceEntries.push(
         new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new EngineError(ErrorCode.HANDLER_TIMEOUT, 'handler timed out')), opts.handlerTimeoutMs)
+          timer = setTimeout(() => {
+            const timeoutError = new RunAbortError('timeout', 'handler timed out', ErrorCode.HANDLER_TIMEOUT)
+            controller.abort(timeoutError)
+            reject(timeoutError)
+          }, opts.handlerTimeoutMs)
         }),
-      ])
+      )
     }
-    return def.handler(ctx)
+
+    try {
+      return await Promise.race(raceEntries)
+    } finally {
+      if (timer) clearTimeout(timer)
+      if (onAbort) controller.signal.removeEventListener('abort', onAbort)
+    }
   }
 
   function finalizeSuccess(run: Run, result: HandlerResult, context: Record<string, unknown>, durationMs: number) {
@@ -172,10 +222,11 @@ export function createBus(registry: Registry, runStore: RunStore, opts: BusOptio
   function finalizeError(run: Run, err: unknown, def: ProcessDefinition, durationMs: number) {
     try {
       const current = runStore.get(run.id)
-      if (current && current.state !== 'running') return
+      if (!current || current.state !== 'running') return
+      if (opts.leaseOwner && current.leaseOwner !== opts.leaseOwner) return
 
       const error = err instanceof Error ? err.message : String(err)
-      const errorCode = err instanceof EngineError ? err.code : undefined
+      const errorCode = err instanceof EngineError ? err.code : err instanceof RunAbortError ? err.code : undefined
       const retryPolicy = def.retry ?? opts.defaultRetry
       const attempt = current!.attempt
 
@@ -204,26 +255,46 @@ export function createBus(registry: Registry, runStore: RunStore, opts: BusOptio
     const validated = validateSchema(run, def)
     if (!validated.ok) return
 
+    const controller = new AbortController()
+    executionControllers.set(run.id, controller)
+
     const startTime = Date.now()
     try {
       opts.emitEvent({ type: 'run:start', run })
-      const ctx = buildContext(run, validated.payload)
-      const result = await invokeHandler(def, ctx)
+      const ctx = buildContext(run, validated.payload, controller.signal)
+      const result = await invokeHandler(def, ctx, controller)
       const durationMs = Date.now() - startTime
 
-      // Guard: if timeout already errored this run, bail
       const current = runStore.get(run.id)
-      if (current && current.state !== 'running') return
+      if (!current || current.state !== 'running') return
+      if (opts.leaseOwner && current.leaseOwner !== opts.leaseOwner) return
 
       checkPayloadSize(result.payload)
       finalizeSuccess(run, result, ctx.context, durationMs)
     } catch (err) {
       const durationMs = Date.now() - startTime
+      if (err instanceof RunAbortError && (err.kind === 'cancel' || err.kind === 'lease' || err.kind === 'stop')) {
+        return
+      }
       finalizeError(run, err, def, durationMs)
+    } finally {
+      executionControllers.delete(run.id)
     }
   }
 
-  return { enqueue, executeRun }
+  function abortRun(runId: string, kind: AbortKind, message: string): void {
+    const controller = executionControllers.get(runId)
+    if (!controller || controller.signal.aborted) return
+    controller.abort(new RunAbortError(kind, message, kind === 'timeout' ? ErrorCode.HANDLER_TIMEOUT : undefined))
+  }
+
+  function abortAll(kind: Exclude<AbortKind, 'timeout'>, message: string): void {
+    for (const runId of executionControllers.keys()) {
+      abortRun(runId, kind, message)
+    }
+  }
+
+  return { enqueue, executeRun, abortRun, abortAll }
 }
 
 export type Bus = ReturnType<typeof createBus>
