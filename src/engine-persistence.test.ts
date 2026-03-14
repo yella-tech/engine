@@ -9,7 +9,8 @@ import type { Run } from './types.js'
 
 function forceStaleRunningLease(dbPath: string, run: Run): void {
   const db = new Database(dbPath)
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE runs
     SET state = 'running',
         result = NULL,
@@ -21,15 +22,8 @@ function forceStaleRunningLease(dbPath: string, run: Run): void {
         lease_expires_at = ?,
         heartbeat_at = ?
     WHERE id = ?
-  `).run(
-    JSON.stringify(run.timeline),
-    run.attempt,
-    run.retryAfter,
-    run.leaseOwner,
-    Date.now() - 1,
-    run.heartbeatAt ?? Date.now() - 10,
-    run.id,
-  )
+  `,
+  ).run(JSON.stringify(run.timeline), run.attempt, run.retryAfter, run.leaseOwner, Date.now() - 1, run.heartbeatAt ?? Date.now() - 10, run.id)
   db.close()
 }
 

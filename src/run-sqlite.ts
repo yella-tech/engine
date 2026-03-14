@@ -752,9 +752,7 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
       if (candidates.length === 0) return []
 
       const candidateById = new Map(candidates.map((run) => [run.id, run]))
-      const prunedIds = new Set(
-        candidates.filter((run) => run.childRunIds.every((childId) => stmts.getById.get(childId) === undefined)).map((run) => run.id),
-      )
+      const prunedIds = new Set(candidates.filter((run) => run.childRunIds.every((childId) => stmts.getById.get(childId) === undefined)).map((run) => run.id))
 
       if (prunedIds.size === 0) return []
 

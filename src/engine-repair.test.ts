@@ -58,7 +58,6 @@ function gracefulStopTests(label: string, opts: EngineOptions) {
         finished = true
         return { success: true }
       })
-
       ;[{ id: runId }] = engine.emit('evt', null)
       await new Promise((r) => setTimeout(r, 5))
 
