@@ -26,9 +26,9 @@ export function RunsPanel({ onRowClick, activeRunId }: { onRowClick: (id: string
 
   return (
     <div>
-      <div style="display:flex;align-items:center;gap:var(--space-4)">
+      <div class="panel-toolbar mb-4">
         <FilterTabs active={filter} onChange={onFilterChange} />
-        <label style="display:flex;align-items:center;gap:var(--space-2);cursor:pointer;white-space:nowrap;font-size:var(--text-sm)">
+        <label class="panel-toggle">
           <input
             type="checkbox"
             checked={rootOnly}

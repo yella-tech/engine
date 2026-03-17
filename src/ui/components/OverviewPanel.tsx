@@ -23,14 +23,16 @@ export function OverviewPanel({
     <div>
       <StatsGrid queue={health.queue || {}} />
       {extraStats}
-      <div class="label mb-3" style="display:flex;align-items:center;gap:var(--space-4)">
-        <span>
+      <div class="panel-toolbar mb-3">
+        <div class="label" style="margin:0">
           Recent Runs <span class="badge badge-idle">{recentRuns.total ?? 0}</span>
-        </span>
+        </div>
         {onRootOnlyChange && (
-          <label style="display:flex;align-items:center;gap:var(--space-2);font-weight:400">
+          <label class="panel-toggle">
             <input type="checkbox" checked={rootOnly} onChange={(e) => onRootOnlyChange((e.target as HTMLInputElement).checked)} />
-            <span class="label-muted" style="margin:0">Root only</span>
+            <span class="label-muted" style="margin:0">
+              Root only
+            </span>
           </label>
         )}
       </div>

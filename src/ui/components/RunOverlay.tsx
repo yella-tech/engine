@@ -34,58 +34,62 @@ export function RunOverlay({ overlay, actions }: { overlay: OverlayState; action
     if (open) actions.closeOverlay()
   })
 
-  if (!open) return <div class="run-overlay"></div>
+  if (!open) return null
 
   const rootRun = chain.find((c: any) => c.parentRunId === null) || chain[0]
+  const overlayTitle = `Run ${shortId(runId!)}`
 
   return (
-    <div class="run-overlay open">
-      <div class="overlay-header">
-        <span style="font-weight:700;text-transform:uppercase;letter-spacing:var(--tracking-wide);font-size:var(--text-sm)">Run {shortId(runId!)}</span>
-        <button class="modal-close" style="border-color:var(--white);color:var(--white)" onClick={actions.closeOverlay}>
-          ×
-        </button>
-      </div>
-      <div class="overlay-body">
-        {run ? (
-          <>
-            <DetailRow label="ID">{run.id}</DetailRow>
-            <DetailRow label="Process">{run.processName}</DetailRow>
-            <DetailRow label="Event">{run.eventName}</DetailRow>
-            <DetailRow label="Status">
-              <Badge state={runStatus(run)} />
-            </DetailRow>
-            <DetailRow label="Correlation">{shortId(run.correlationId)}</DetailRow>
-          </>
-        ) : (
-          <div class="empty">Loading...</div>
-        )}
+    <div class="run-overlay-shell open">
+      <button type="button" class="run-overlay-backdrop" aria-label="Close run details" onClick={actions.closeOverlay}></button>
+      <div class="run-overlay open" role="dialog" aria-modal="true" aria-label={overlayTitle}>
+        <div class="overlay-header">
+          <span class="overlay-header-title">{overlayTitle}</span>
+          <button class="modal-close" style="border-color:var(--white);color:var(--white)" onClick={actions.closeOverlay}>
+            ×
+          </button>
+        </div>
+        <div class="overlay-body">
+          {run ? (
+            <>
+              <DetailRow label="ID">{run.id}</DetailRow>
+              <DetailRow label="Process">{run.processName}</DetailRow>
+              <DetailRow label="Event">{run.eventName}</DetailRow>
+              <DetailRow label="Status">
+                <Badge state={runStatus(run)} />
+              </DetailRow>
+              <DetailRow label="Correlation">{shortId(run.correlationId)}</DetailRow>
+            </>
+          ) : (
+            <div class="empty">Loading...</div>
+          )}
 
-        {chain.length > 0 && (
-          <>
-            <div class="label mt-5 mb-3">Timeline</div>
-            <Timeline chain={chain} selectedIdx={selectedStepIdx} onSelect={(i) => actions.selectStep(i)} />
-          </>
-        )}
+          {chain.length > 0 && (
+            <>
+              <div class="label mt-5 mb-3">Timeline</div>
+              <Timeline chain={chain} selectedIdx={selectedStepIdx} onSelect={(i) => actions.selectStep(i)} />
+            </>
+          )}
 
-        {stepDetail.run && (
-          <StepDetail run={stepDetail.run} effects={stepDetail.effects} onRetry={actions.retryStep} onRequeue={actions.requeueStep} onReemit={actions.reemitStep} onResume={actions.resumeStep} />
-        )}
+          {stepDetail.run && (
+            <StepDetail run={stepDetail.run} effects={stepDetail.effects} onRetry={actions.retryStep} onRequeue={actions.requeueStep} onReemit={actions.reemitStep} onResume={actions.resumeStep} />
+          )}
 
-        {rootRun && (
-          <div style="display:flex;gap:var(--space-3);margin-top:var(--space-4)">
-            {actions.viewInTrace && (
-              <button class="btn btn-sm" onClick={() => actions.viewInTrace!(rootRun.id)}>
-                View in Trace
-              </button>
-            )}
-            {actions.viewInGraph && (
-              <button class="btn btn-sm" onClick={() => actions.viewInGraph!(rootRun.id)}>
-                View Graph
-              </button>
-            )}
-          </div>
-        )}
+          {rootRun && (
+            <div class="overlay-inline-actions">
+              {actions.viewInTrace && (
+                <button class="btn btn-sm" onClick={() => actions.viewInTrace!(rootRun.id)}>
+                  View in Trace
+                </button>
+              )}
+              {actions.viewInGraph && (
+                <button class="btn btn-sm" onClick={() => actions.viewInGraph!(rootRun.id)}>
+                  View Graph
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

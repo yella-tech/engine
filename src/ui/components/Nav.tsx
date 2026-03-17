@@ -24,6 +24,7 @@ export function NavView({
 }) {
   const visibleTabs = tabs.filter((t) => !t.hidden)
   const [uptime, setUptime] = useState('--')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     if (uptimeStartedAtMs === null) {
@@ -40,22 +41,51 @@ export function NavView({
     return () => clearInterval(timer)
   }, [uptimeStartedAtMs])
 
+  useEffect(() => {
+    setMobileMenuOpen(false)
+  }, [activeTab])
+
   return (
-    <nav class="nav">
-      <a class="nav-brand" href="/">
-        {brand}
-      </a>
-      <ul class="nav-items">
-        {visibleTabs.map((t) => (
-          <li class="nav-item" key={t.id}>
-            <a class={`nav-link ${activeTab === t.id ? 'active' : ''}`} href={`#${t.path}`} title={t.id}>
-              {t.icon}
-              <span class="hide-mobile">{t.label}</span>
-            </a>
-          </li>
-        ))}
-      </ul>
-      <div style="margin-left:auto;display:flex;align-items:center;gap:var(--space-3);padding-right:var(--space-4)">
+    <nav class={`nav dashboard-nav ${mobileMenuOpen ? 'menu-open' : ''}`}>
+      <div class="nav-shell">
+        <div class="nav-brand-row">
+          <a class="nav-brand" href="#/">
+            {brand}
+          </a>
+          <button
+            type="button"
+            class="nav-toggle"
+            aria-controls="dashboard-nav-items"
+            aria-expanded={mobileMenuOpen}
+            aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            onClick={() => setMobileMenuOpen((open) => !open)}
+          >
+            <span class="nav-toggle-label">{mobileMenuOpen ? 'Close' : 'Menu'}</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <line x1="4" y1="7" x2="20" y2="7" />
+              <line x1="4" y1="12" x2="20" y2="12" />
+              <line x1="4" y1="17" x2="20" y2="17" />
+            </svg>
+          </button>
+        </div>
+        <ul class="nav-items" id="dashboard-nav-items">
+          {visibleTabs.map((t) => (
+            <li class="nav-item" key={t.id}>
+              <a class={`nav-link ${activeTab === t.id ? 'active' : ''}`} href={`#${t.path}`} title={t.id} onClick={() => setMobileMenuOpen(false)}>
+                {t.icon}
+                <span class="nav-link-label">{t.label}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+        <div class="nav-status nav-status-mobile">
+          <div class="status-dot"></div>
+          <span class="label-muted" style="margin:0">
+            {uptime}
+          </span>
+        </div>
+      </div>
+      <div class="nav-status nav-status-desktop">
         <div class="status-dot"></div>
         <span class="label-muted" style="margin:0">
           {uptime}

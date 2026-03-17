@@ -304,6 +304,35 @@ describe('DashboardShell', () => {
     expect(screen.queryByText('process-a:event')).toBeNull()
   })
 
+  it('renders the run overlay as a dismissible dialog', async () => {
+    window.location.hash = '#/runs'
+
+    const runId = 'run-dialog'
+
+    render(
+      <DashboardShell
+        config={createConfig((tab, ctx) => {
+          if (tab !== 'runs') return <div>{tab}</div>
+          return <button onClick={() => ctx.overlayActions.openOverlay(runId)}>Open Dialog Run</button>
+        })}
+        runtimeDeps={createDashboardRuntimeDeps({
+          rpc: createRpc(),
+          live: createLiveController().live,
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Dialog Run' }))
+
+    await screen.findByRole('dialog', { name: /run run-dialog/i })
+
+    fireEvent.click(screen.getByRole('button', { name: /close run details/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /run run-dialog/i })).toBeNull()
+    })
+  })
+
   it('retries the selected errored step and refreshes the active overlay', async () => {
     window.location.hash = '#/runs'
 

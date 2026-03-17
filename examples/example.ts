@@ -3,6 +3,7 @@ import { createEngine } from '../src/index.js'
 
 // Clean up any previous run
 const dbPath = '_db/runs.db'
+const host = process.env.ENGINE_EXAMPLE_HOST ?? '0.0.0.0'
 const port = Number(process.env.ENGINE_EXAMPLE_PORT ?? '0')
 fs.mkdirSync('_db', { recursive: true })
 for (const path of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {
@@ -12,7 +13,7 @@ for (const path of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {
 const engine = createEngine({
   store: { type: 'sqlite', path: dbPath },
   concurrency: 10,
-  server: { port },
+  server: { host, port },
 })
 
 // Helper: random delay between min and max ms
@@ -135,7 +136,7 @@ engine.process({
 
 async function main() {
   const server = await engine.getServer()!
-  console.log(`Dashboard: http://${server.address.host}:${server.address.port}\n`)
+  console.log(`Dashboard bound to http://${server.address.host}:${server.address.port} (reachable via LAN hostname/IP)\n`)
 
   // Fire off an order chain
   console.log('--- Order pipeline ---')
@@ -161,7 +162,7 @@ async function main() {
   const completed = engine.getCompleted()
   const errored = engine.getErrored()
   console.log(`\nCompleted: ${completed.length}, Errored: ${errored.length}`)
-  console.log(`Dashboard running at http://${server.address.host}:${server.address.port}`)
+  console.log(`Dashboard running at http://${server.address.host}:${server.address.port} (reachable via LAN hostname/IP)`)
   console.log('Press Ctrl+C to stop')
 }
 
