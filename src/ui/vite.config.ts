@@ -1,9 +1,11 @@
 import { defineConfig } from 'vite'
-import preact from '@preact/preset-vite'
 import path from 'node:path'
 
 export default defineConfig({
-  plugins: [preact()],
+  esbuild: {
+    jsx: 'automatic',
+    jsxImportSource: 'preact',
+  },
   root: __dirname,
   server: {
     proxy: {
