@@ -927,7 +927,7 @@ body { display: flex; flex-direction: column; font-size: var(--text-sm); }
     width: auto;
   }
 
-  .stats-grid.grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .stats-grid.grid-4, .stats-grid.grid-5 { grid-template-columns: repeat(2, 1fr); }
   .chain-picker-toolbar { flex-direction: column; }
   .chain-picker-clear { width: 100%; }
   .chain-picker-head,

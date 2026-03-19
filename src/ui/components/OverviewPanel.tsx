@@ -8,6 +8,7 @@ export function OverviewPanel({
   onRowClick,
   activeRunId,
   extraStats,
+  statsGridExtra,
   rootOnly,
   onRootOnlyChange,
 }: {
@@ -16,12 +17,13 @@ export function OverviewPanel({
   onRowClick: (id: string) => void
   activeRunId: string | null
   extraStats?: ComponentChildren
+  statsGridExtra?: Array<{ label: string; value: number | string }>
   rootOnly?: boolean
   onRootOnlyChange?: (v: boolean) => void
 }) {
   return (
     <div>
-      <StatsGrid queue={health.queue || {}} />
+      <StatsGrid queue={health.queue || {}} extra={statsGridExtra} />
       {extraStats}
       <div class="panel-toolbar mb-3">
         <div class="label" style="margin:0">

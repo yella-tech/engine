@@ -10,6 +10,7 @@ import type { DashboardPanelRenderer, DashboardPlugin } from '../runtime/dashboa
 
 export interface EngineDashboardPluginOptions {
   renderOverviewStats?: DashboardPanelRenderer
+  statsGridExtra?: (ctx: any) => Array<{ label: string; value: number | string }> | undefined
 }
 
 export function createEngineDashboardPlugin(options: EngineDashboardPluginOptions = {}): DashboardPlugin {
@@ -35,6 +36,7 @@ export function createEngineDashboardPlugin(options: EngineDashboardPluginOption
           onRowClick={ctx.overlayActions.openOverlay}
           activeRunId={ctx.overlay.open ? ctx.overlay.runId : null}
           extraStats={renderOverviewStats(ctx)}
+          statsGridExtra={options.statsGridExtra?.(ctx)}
           rootOnly={ctx.overviewRootOnly}
           onRootOnlyChange={ctx.setOverviewRootOnly}
         />
