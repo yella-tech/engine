@@ -716,6 +716,23 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
   function getByStatePaginated(state: ProcessState | null, limit: number, offset: number, opts?: RunQueryOptions): { runs: Run[]; total: number } {
     const root = opts?.root ?? false
     const order = opts?.order ?? 'desc'
+
+    if (opts?.eventName) {
+      const clauses: string[] = []
+      const params: unknown[] = []
+      if (state) {
+        clauses.push('state = ?')
+        params.push(state)
+      }
+      if (root) clauses.push('parent_run_id IS NULL')
+      clauses.push('event_name = ?')
+      params.push(opts.eventName)
+      const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : ''
+      const rows = db.prepare(`SELECT * FROM runs ${where} ORDER BY started_at ${order.toUpperCase()} LIMIT ? OFFSET ?`).all(...params, limit, offset) as RunRow[]
+      const total = (db.prepare(`SELECT COUNT(*) as cnt FROM runs ${where}`).get(...params) as { cnt: number }).cnt
+      return { runs: rows.map(rowToRun), total }
+    }
+
     const pageStmt = getStatePageStatement(state, order, root)
 
     if (state) {
@@ -734,6 +751,26 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
   function getByStatusPaginated(status: RunStatus, limit: number, offset: number, opts?: RunQueryOptions): { runs: Run[]; total: number } {
     if (status === 'idle' || status === 'running') {
       return getByStatePaginated(status, limit, offset, opts)
+    }
+
+    if (opts?.eventName) {
+      const root = opts?.root ?? false
+      const order = opts?.order ?? 'desc'
+      const statusWhere =
+        status === 'completed'
+          ? `state = 'completed' AND NOT (${DEFERRED_MARKER_PREDICATE})`
+          : status === 'deferred'
+            ? `state = 'completed' AND ${DEFERRED_MARKER_PREDICATE}`
+            : status === 'errored'
+              ? `state = 'errored' AND NOT (${DEAD_LETTER_MARKER_PREDICATE})`
+              : `state = 'errored' AND ${DEAD_LETTER_MARKER_PREDICATE}`
+      const clauses = [statusWhere, 'event_name = ?']
+      const params: unknown[] = [opts.eventName]
+      if (root) clauses.push('parent_run_id IS NULL')
+      const where = `WHERE ${clauses.join(' AND ')}`
+      const rows = db.prepare(`SELECT * FROM runs ${where} ORDER BY started_at ${order.toUpperCase()} LIMIT ? OFFSET ?`).all(...params, limit, offset) as RunRow[]
+      const total = (db.prepare(`SELECT COUNT(*) as cnt FROM runs ${where}`).get(...params) as { cnt: number }).cnt
+      return { runs: rows.map(rowToRun), total }
     }
 
     const root = opts?.root ?? false

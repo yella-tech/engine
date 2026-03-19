@@ -452,6 +452,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
               ? runStore.getByState('errored').filter((run) => getRunStatus(run) === 'dead-letter')
               : runStore.getByState(status)
     if (opts?.root) runs = runs.filter((r) => r.parentRunId === null)
+    if (opts?.eventName) runs = runs.filter((r) => r.eventName === opts.eventName)
     const order = opts?.order ?? 'desc'
     runs.sort((a, b) => (order === 'asc' ? a.startedAt - b.startedAt : b.startedAt - a.startedAt))
     return { runs: runs.slice(offset, offset + limit), total: runs.length }
@@ -461,6 +462,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     if (runStore.getByStatePaginated) return runStore.getByStatePaginated(state, limit, offset, opts)
     let runs = state ? runStore.getByState(state) : runStore.getAll()
     if (opts?.root) runs = runs.filter((r) => r.parentRunId === null)
+    if (opts?.eventName) runs = runs.filter((r) => r.eventName === opts.eventName)
     const order = opts?.order ?? 'desc'
     runs.sort((a, b) => (order === 'asc' ? a.startedAt - b.startedAt : b.startedAt - a.startedAt))
     return { runs: runs.slice(offset, offset + limit), total: runs.length }

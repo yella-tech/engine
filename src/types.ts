@@ -78,6 +78,8 @@ export type RunQueryOptions = {
   root?: boolean
   /** Order by `startedAt`. Defaults to `'desc'`. */
   order?: RunSortOrder
+  /** Filter to runs triggered by a specific event name. */
+  eventName?: string
 }
 
 /**

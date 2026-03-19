@@ -367,7 +367,11 @@ export function createRunStore(): RunStore {
 
   function paginateRuns(list: Run[], limit: number, offset: number, opts?: RunQueryOptions): { runs: Run[]; total: number } {
     const order = opts?.order ?? 'desc'
-    const filtered = opts?.root ? list.filter((run) => run.parentRunId === null) : list
+    let filtered = opts?.root ? list.filter((run) => run.parentRunId === null) : list
+    if (opts?.eventName) {
+      const eventName = opts.eventName
+      filtered = filtered.filter((run) => run.eventName === eventName)
+    }
     filtered.sort((a, b) => (order === 'asc' ? a.startedAt - b.startedAt : b.startedAt - a.startedAt))
     return {
       runs: filtered.slice(offset, offset + limit).map(cloneRun),

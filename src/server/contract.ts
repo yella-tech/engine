@@ -16,8 +16,8 @@ export interface RoutableEngine {
   emit(event: string, payload: unknown, opts?: { idempotencyKey?: string }): Run[]
   resume(runId: string, payload?: unknown): Run[]
   countByState(state: ProcessState): number
-  getRunsByStatusPaginated(status: RunStatus, limit: number, offset: number, opts?: { root?: boolean; order?: 'asc' | 'desc' }): { runs: Run[]; total: number }
-  getRunsPaginated(state: ProcessState | null, limit: number, offset: number, opts?: { root?: boolean; order?: 'asc' | 'desc' }): { runs: Run[]; total: number }
+  getRunsByStatusPaginated(status: RunStatus, limit: number, offset: number, opts?: { root?: boolean; order?: 'asc' | 'desc'; eventName?: string }): { runs: Run[]; total: number }
+  getRunsPaginated(state: ProcessState | null, limit: number, offset: number, opts?: { root?: boolean; order?: 'asc' | 'desc'; eventName?: string }): { runs: Run[]; total: number }
   getMetrics(): EngineMetrics
   getObservability(query?: EngineObservabilityQuery): EngineObservabilityReport
   subscribeEvents(listener: (event: EngineEvent) => void): () => void

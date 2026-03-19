@@ -100,6 +100,7 @@ export function registerRoutes<T extends Hono>(app: T, engine: RoutableEngine) {
     .get('/runs', (c) => {
       const state = c.req.query('state') as ProcessState | undefined
       const status = c.req.query('status') as RunStatus | undefined
+      const eventName = c.req.query('eventName')
       const validStates: ProcessState[] = ['running', 'completed', 'errored', 'idle']
       const validStatuses: RunStatus[] = ['running', 'completed', 'errored', 'idle', 'deferred', 'dead-letter']
       return c.json(
@@ -109,6 +110,7 @@ export function registerRoutes<T extends Hono>(app: T, engine: RoutableEngine) {
           limit: Math.max(1, Math.min(Number.parseInt(c.req.query('limit') ?? '50', 10) || 50, 200)),
           offset: Math.max(Number.parseInt(c.req.query('offset') ?? '0', 10) || 0, 0),
           root: c.req.query('root') === 'true',
+          eventName,
         }),
       )
     })

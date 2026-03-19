@@ -56,7 +56,8 @@ export const rpc = {
     get: async (query: { from?: number; to?: number; window?: string; bucketMs?: number }): Promise<ObservabilityResponse> => requestJson(`/observability${stringQuery(query)}`),
   },
   runs: {
-    list: async (query: { limit?: number; offset?: number; state?: string; status?: string; root?: boolean }): Promise<RunsListResponse> => requestJson(`/runs${stringQuery(query)}`),
+    list: async (query: { limit?: number; offset?: number; state?: string; status?: string; root?: boolean; eventName?: string }): Promise<RunsListResponse> =>
+      requestJson(`/runs${stringQuery(query)}`),
     get: async (id: string): Promise<RunResponse> => requestJson(`/runs/${id}`),
     chain: async (id: string): Promise<RunChainResponse> => requestJson(`/runs/${id}/chain`),
     overlay: async (id: string, query?: { selectedId?: string }): Promise<RunOverlayResponse> => requestJson(`/runs/${id}/overlay${stringQuery(query ?? {})}`),
