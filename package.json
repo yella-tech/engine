@@ -29,6 +29,7 @@
     "dev:ui": "vite dev --config src/ui/vite.config.ts",
     "prepare": "node scripts/setup-git-hooks.mjs",
     "postbuild:legacy": "cp -r src/server/public dist/server/public",
+    "release": "node scripts/release.mjs",
     "test": "vitest run",
     "test:watch": "vitest --ui --coverage",
     "example": "tsx examples/example.ts",

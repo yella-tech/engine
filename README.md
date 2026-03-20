@@ -239,6 +239,29 @@ npm run dev:ui
 
 The Vite dev server runs on port 5173 with hot module replacement. Edit any component in `src/ui/` and see changes instantly.
 
+## Releases
+
+Normal development should keep moving on `main` without bumping `package.json` or creating tags on every commit.
+
+When you are actually ready to publish:
+
+```bash
+# 1. Add a changelog entry first:
+#    ## 0.14.4 - YYYY-MM-DD
+
+# 2. Cut the release commit and tag
+npm run release -- 0.14.4
+
+# 3. Or do the full release, including npm publish and git push
+npm run release -- 0.14.4 --publish
+```
+
+The release script requires:
+
+- a clean working tree
+- a matching `CHANGELOG.md` heading for the target version
+- passing `format:check`, `test`, and `build`
+
 ## Docs
 
 Full documentation, architecture guide, and API reference at [yella.tech](https://yella.tech).
