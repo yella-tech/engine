@@ -1,0 +1,20 @@
+#!/bin/sh
+set -eu
+
+if [ "${SKIP_PRECOMMIT:-}" = "1" ]; then
+  echo "==> Skipping pre-commit checks (SKIP_PRECOMMIT=1)"
+  exit 0
+fi
+
+echo "==> Running pre-commit checks..."
+
+echo "  format:check"
+npm run format:check
+
+echo "  test"
+npm test
+
+echo "  build"
+npm run build
+
+echo "==> All pre-commit checks passed."

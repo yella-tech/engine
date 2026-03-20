@@ -1,6 +1,6 @@
 {
   "name": "@yellatech/engine",
-  "version": "0.14.2",
+  "version": "0.14.3",
   "description": "Durable TypeScript runtime for agents and automations. Effects store their results, retries pick up where you left off.",
   "main": "dist/index.js",
   "exports": {
@@ -27,6 +27,7 @@
     "build": "tsc && npm run build:ui && tsc -p tsconfig.ui.json",
     "build:ui": "vite build --config src/ui/vite.config.ts && cp src/ui/production.html dist/ui/index.html",
     "dev:ui": "vite dev --config src/ui/vite.config.ts",
+    "prepare": "node scripts/setup-git-hooks.mjs",
     "postbuild:legacy": "cp -r src/server/public dist/server/public",
     "test": "vitest run",
     "test:watch": "vitest --ui --coverage",

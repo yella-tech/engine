@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.14.3 - 2026-03-21
+
+### Fixed
+- Removed the stale `@preact/preset-vite` dependency from the Vitest config so CI can load the test runner after the UI build moved to the esbuild JSX runtime.
+
 ## 0.14.0 - 2026-03-14
 
 ### Added
