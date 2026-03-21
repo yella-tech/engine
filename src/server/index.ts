@@ -53,7 +53,7 @@ export function resolveEngineUiDir(): string {
 
 function buildDashboardBundle(uiDir: string): { indexHtml: string; assets: Map<string, DashboardAsset> } {
   const publicDir = path.join(__dirname, 'public')
-  const indexHtml = readFileOr(path.join(uiDir, 'index.html'), fallbackHtml)
+  let indexHtml = readFileOr(path.join(uiDir, 'index.html'), fallbackHtml)
   const assets = new Map<string, DashboardAsset>()
 
   const fallbackCssPath = path.join(publicDir, 'brutalist.css')
@@ -78,13 +78,27 @@ function buildDashboardBundle(uiDir: string): { indexHtml: string; assets: Map<s
     }
   }
 
+  // Resolve hashed asset filenames in index.html
+  for (const assetPath of assets.keys()) {
+    const base = path.basename(assetPath)
+    const match = base.match(/^(.+)-[a-zA-Z0-9]+(\.\w+)$/)
+    if (match) {
+      const unhashed = match[1] + match[2]
+      indexHtml = indexHtml.replaceAll('/' + unhashed, assetPath)
+    }
+  }
+
   return { indexHtml, assets }
 }
 
-function respondWithAsset(c: Context, asset: DashboardAsset) {
+function respondWithAsset(c: Context, asset: DashboardAsset, immutable = false) {
   c.header('Content-Type', asset.contentType)
-  c.header('Cache-Control', 'public, max-age=3600')
+  c.header('Cache-Control', immutable ? 'public, max-age=31536000, immutable' : 'public, max-age=3600')
   return c.body(asset.content)
+}
+
+function isHashedAsset(route: string): boolean {
+  return /\/.+-[a-zA-Z0-9]+\.\w+$/.test(route)
 }
 
 function installDashboardFallback(app: Hono, uiDir: string): void {
@@ -94,9 +108,12 @@ function installDashboardFallback(app: Hono, uiDir: string): void {
     if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
       return c.text('404 Not Found', 404)
     }
-    if (c.req.path === '/') return c.html(indexHtml)
+    if (c.req.path === '/') {
+      c.header('Cache-Control', 'no-cache')
+      return c.html(indexHtml)
+    }
     const asset = assets.get(c.req.path)
-    if (asset) return respondWithAsset(c, asset)
+    if (asset) return respondWithAsset(c, asset, isHashedAsset(c.req.path))
     return c.text('404 Not Found', 404)
   })
 }
@@ -111,10 +128,13 @@ function installDashboardFallback(app: Hono, uiDir: string): void {
 export function serveDashboard(app: Hono, uiDir: string): void {
   const { indexHtml, assets } = buildDashboardBundle(uiDir)
 
-  app.get('/', (c) => c.html(indexHtml))
+  app.get('/', (c) => {
+    c.header('Cache-Control', 'no-cache')
+    return c.html(indexHtml)
+  })
 
   for (const [route, asset] of assets) {
-    app.get(route, (c) => respondWithAsset(c, asset))
+    app.get(route, (c) => respondWithAsset(c, asset, isHashedAsset(route)))
   }
 }
 

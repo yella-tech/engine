@@ -28,8 +28,8 @@ export default defineConfig({
     rollupOptions: {
       external: ['preact', 'preact/hooks', 'preact/jsx-runtime'],
       output: {
-        assetFileNames: 'style.css',
-        chunkFileNames: 'shared.js',
+        assetFileNames: 'style-[hash].css',
+        chunkFileNames: 'shared-[hash].js',
       },
     },
     outDir: path.resolve(__dirname, '../../dist/ui'),
