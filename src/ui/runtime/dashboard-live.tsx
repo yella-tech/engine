@@ -11,8 +11,6 @@ export interface DashboardLiveEvent {
 
 function tickerStatusForEvent(event: EngineStreamEvent): string | null {
   switch (event.eventType) {
-    case 'run:start':
-      return 'running'
     case 'run:complete':
       return 'completed'
     case 'run:error':
