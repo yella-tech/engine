@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.14.5 - 2026-03-21
+
+### Changed
+- Moved `brutalist.css` design system from `server/public/` to `src/ui/` alongside dashboard styles. Both files are included in the npm package for the `@yellatech/engine/styles.css` export.
+
 ## 0.14.4 - 2026-03-21
 
 ### Fixed

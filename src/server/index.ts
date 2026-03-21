@@ -52,11 +52,12 @@ export function resolveEngineUiDir(): string {
 }
 
 function buildDashboardBundle(uiDir: string): { indexHtml: string; assets: Map<string, DashboardAsset> } {
-  const publicDir = path.join(__dirname, 'public')
   let indexHtml = readFileOr(path.join(uiDir, 'index.html'), fallbackHtml)
   const assets = new Map<string, DashboardAsset>()
 
-  const fallbackCssPath = path.join(publicDir, 'brutalist.css')
+  // brutalist.css lives in src/ui/ — resolve relative to package root
+  const pkgRoot = path.join(__dirname, '..', '..')
+  const fallbackCssPath = path.join(pkgRoot, 'src', 'ui', 'brutalist.css')
   const fallbackCss = readFileOr(fallbackCssPath, '')
   if (fallbackCss) {
     assets.set('/style.css', {

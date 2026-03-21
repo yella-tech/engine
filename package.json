@@ -21,6 +21,7 @@
   "files": [
     "dist",
     "src/ui/styles.css",
+    "src/ui/brutalist.css",
     "CHANGELOG.md",
     "LICENSE",
     "README.md"

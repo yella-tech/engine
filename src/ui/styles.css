@@ -1,4 +1,4 @@
-@import '../server/public/brutalist.css';
+@import './brutalist.css';
 
 /* Dashboard-specific overrides */
 html, body { height: 100%; overflow: hidden; }
