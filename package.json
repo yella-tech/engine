@@ -15,10 +15,12 @@
     "./ui": {
       "types": "./dist/ui/index.d.ts",
       "default": "./dist/ui/ui.js"
-    }
+    },
+    "./styles.css": "./src/ui/styles.css"
   },
   "files": [
     "dist",
+    "src/ui/styles.css",
     "CHANGELOG.md",
     "LICENSE",
     "README.md"
