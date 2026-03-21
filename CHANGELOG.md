@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.14.4 - 2026-03-21
+
+### Fixed
+- Added `X-Accel-Buffering: no` header to SSE responses so reverse proxies flush events immediately.
+- Dashboard ticker now shows only terminal states (completed, errored, dead-letter) instead of every state transition.
+
+### Changed
+- Dashboard assets use content-hashed filenames for cache busting. Hashed assets get immutable caching; `index.html` gets `no-cache`.
+- Exported source CSS via `@yellatech/engine/styles.css` package export for stable consumption by downstream packages.
+
 ## 0.14.3 - 2026-03-21
 
 ### Fixed
