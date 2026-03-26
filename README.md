@@ -122,7 +122,7 @@ Deferred runs keep their next event on the completed run until `engine.resume(ru
 - **Deferred and dead-letter statuses** for operator-facing pause/failure visibility
 - **Lifecycle events and metrics** via `onEvent()` and `engine.getMetrics()`
 - **Schema validation** via Zod (or any object with a `.parse()` method)
-- **Atomic event admission** with event-scoped idempotency and singleton claims
+- **Atomic event admission** with event-scoped idempotency and concurrency limits
 - **Cooperative cancellation** via `AbortSignal` on every handler context
 - **Concurrency control** with configurable parallelism
 - **Built-in dev dashboard** for inspecting runs, traces, timelines, and graph views
