@@ -229,7 +229,7 @@ function engineTests(label: string, opts: EngineOptions) {
       expect(completed[0].result!.payload).toEqual({ value: 42, type: 'number' })
     })
 
-    it('singleton process: skips events while first is active', async () => {
+    it('concurrency-limited process: skips events while first is active', async () => {
       engine = createEngine(opts)
       engine.register(
         'proc',
@@ -238,7 +238,7 @@ function engineTests(label: string, opts: EngineOptions) {
           await new Promise((r) => setTimeout(r, 50))
           return { success: true }
         },
-        { singleton: true },
+        { concurrency: 1 },
       )
 
       const runs1 = engine.emit('evt', null)

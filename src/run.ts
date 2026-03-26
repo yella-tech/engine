@@ -6,8 +6,8 @@ import { VALID_TRANSITIONS } from './types.js'
 export function createRunStore(): RunStore {
   const runs = new Map<string, Run>()
   const emissionReservations = new Set<string>()
-  const activeSingletons = new Map<string, string>()
-  const singletonRunProcesses = new Map<string, string>()
+  const activeConcurrencyRuns = new Map<string, Set<string>>()
+  const concurrencyRunProcesses = new Map<string, string>()
 
   function cloneValue<T>(value: T): T {
     try {
@@ -32,24 +32,26 @@ export function createRunStore(): RunStore {
     return `${eventName}\u0000${idempotencyKey}`
   }
 
-  function syncSingletonForStateChange(run: Run, nextState: ProcessState): void {
-    const processName = singletonRunProcesses.get(run.id)
+  function syncConcurrencyForStateChange(run: Run, nextState: ProcessState): void {
+    const processName = concurrencyRunProcesses.get(run.id)
     if (!processName) return
 
     const wasActive = run.state === 'idle' || run.state === 'running'
     const willBeActive = nextState === 'idle' || nextState === 'running'
 
     if (!wasActive && willBeActive) {
-      const owner = activeSingletons.get(processName)
-      if (owner && owner !== run.id) {
-        throw new Error(`Singleton already active: ${processName}`)
-      }
-      activeSingletons.set(processName, run.id)
+      const active = activeConcurrencyRuns.get(processName)
+      if (!active) activeConcurrencyRuns.set(processName, new Set([run.id]))
+      else active.add(run.id)
       return
     }
 
-    if (wasActive && !willBeActive && activeSingletons.get(processName) === run.id) {
-      activeSingletons.delete(processName)
+    if (wasActive && !willBeActive) {
+      const active = activeConcurrencyRuns.get(processName)
+      if (active) {
+        active.delete(run.id)
+        if (active.size === 0) activeConcurrencyRuns.delete(processName)
+      }
     }
   }
 
@@ -128,8 +130,11 @@ export function createRunStore(): RunStore {
 
     const creatable: Array<{ id: string; request: RunCreateRequest }> = []
     for (const request of requests) {
-      if (request.singleton && activeSingletons.has(request.processName)) {
-        continue
+      if (request.concurrency !== undefined) {
+        const active = activeConcurrencyRuns.get(request.processName)
+        if (active && active.size >= request.concurrency) {
+          continue
+        }
       }
       creatable.push({ id: crypto.randomUUID(), request })
     }
@@ -137,7 +142,7 @@ export function createRunStore(): RunStore {
     if (creatable.length === 0) return []
 
     const createdIds: string[] = []
-    const reservedSingletons: Array<{ processName: string; runId: string }> = []
+    const reservedConcurrency: Array<{ processName: string; runId: string }> = []
     const parentSnapshots = new Map<string, string[]>()
     let reservedEmission = false
 
@@ -148,10 +153,12 @@ export function createRunStore(): RunStore {
       }
 
       for (const { id, request } of creatable) {
-        if (request.singleton) {
-          activeSingletons.set(request.processName, id)
-          singletonRunProcesses.set(id, request.processName)
-          reservedSingletons.push({ processName: request.processName, runId: id })
+        if (request.concurrency !== undefined) {
+          const active = activeConcurrencyRuns.get(request.processName) ?? new Set()
+          active.add(id)
+          activeConcurrencyRuns.set(request.processName, active)
+          concurrencyRunProcesses.set(id, request.processName)
+          reservedConcurrency.push({ processName: request.processName, runId: id })
         }
         if (request.parentRunId && !parentSnapshots.has(request.parentRunId)) {
           parentSnapshots.set(request.parentRunId, [...(runs.get(request.parentRunId)?.childRunIds ?? [])])
@@ -169,11 +176,13 @@ export function createRunStore(): RunStore {
         const parent = runs.get(parentId)
         if (parent) parent.childRunIds = childIds
       }
-      for (const { processName, runId } of reservedSingletons) {
-        if (activeSingletons.get(processName) === runId) {
-          activeSingletons.delete(processName)
+      for (const { processName, runId } of reservedConcurrency) {
+        const active = activeConcurrencyRuns.get(processName)
+        if (active) {
+          active.delete(runId)
+          if (active.size === 0) activeConcurrencyRuns.delete(processName)
         }
-        singletonRunProcesses.delete(runId)
+        concurrencyRunProcesses.delete(runId)
       }
       if (reservedEmission && reservationKey) {
         emissionReservations.delete(reservationKey)
@@ -191,7 +200,7 @@ export function createRunStore(): RunStore {
       throw new Error(`Invalid transition: ${run.state} → ${state}`)
     }
 
-    syncSingletonForStateChange(run, state)
+    syncConcurrencyForStateChange(run, state)
     run.state = state
     run.leaseOwner = null
     run.leaseExpiresAt = null
@@ -418,11 +427,15 @@ export function createRunStore(): RunStore {
     }
 
     for (const id of prunedIds) {
-      const singletonProcess = singletonRunProcesses.get(id)
-      if (singletonProcess && activeSingletons.get(singletonProcess) === id) {
-        activeSingletons.delete(singletonProcess)
+      const concurrencyProcess = concurrencyRunProcesses.get(id)
+      if (concurrencyProcess) {
+        const active = activeConcurrencyRuns.get(concurrencyProcess)
+        if (active) {
+          active.delete(id)
+          if (active.size === 0) activeConcurrencyRuns.delete(concurrencyProcess)
+        }
+        concurrencyRunProcesses.delete(id)
       }
-      singletonRunProcesses.delete(id)
       runs.delete(id)
     }
 

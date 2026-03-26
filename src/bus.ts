@@ -68,7 +68,7 @@ export function createBus(registry: Registry, runStore: RunStore, opts: BusOptio
         context: parentContext,
         depth: childDepth,
         idempotencyKey: idempotencyKey ?? null,
-        singleton: def.singleton === true,
+        concurrency: def.concurrency,
       })),
     )
   }

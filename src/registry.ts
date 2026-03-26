@@ -9,7 +9,7 @@ export function createRegistry() {
     return typeof value !== 'function' && value !== null && typeof value.parse === 'function'
   }
 
-  type RegisterOpts = { retry?: RetryPolicy; version?: string; singleton?: boolean; emits?: string[] }
+  type RegisterOpts = { retry?: RetryPolicy; version?: string; concurrency?: number; singleton?: boolean; emits?: string[] }
 
   function register(name: string, eventName: string, handler: Handler, opts?: RegisterOpts): void
   function register<T>(name: string, eventName: string, schema: Schema<T>, handler: (ctx: HandlerContext<T>) => Promise<HandlerResult> | HandlerResult, opts?: RegisterOpts): void
@@ -20,7 +20,7 @@ export function createRegistry() {
     let schema: Schema | undefined
     let retry: RetryPolicy | undefined
     let version: string | undefined
-    let singleton: boolean | undefined
+    let concurrency: number | undefined
     let explicitEmits: string[] | undefined
 
     if (typeof maybeHandlerOrOpts === 'function') {
@@ -32,14 +32,14 @@ export function createRegistry() {
       handler = maybeHandlerOrOpts
       retry = maybeOpts?.retry
       version = maybeOpts?.version
-      singleton = maybeOpts?.singleton
+      concurrency = maybeOpts?.concurrency ?? (maybeOpts?.singleton ? 1 : undefined)
       explicitEmits = maybeOpts?.emits
     } else if (!isSchema(schemaOrHandler)) {
       // 3+ arg form: register(name, event, handler, opts?)
       handler = schemaOrHandler
       retry = (maybeHandlerOrOpts as RegisterOpts | undefined)?.retry
       version = (maybeHandlerOrOpts as RegisterOpts | undefined)?.version
-      singleton = (maybeHandlerOrOpts as RegisterOpts | undefined)?.singleton
+      concurrency = (maybeHandlerOrOpts as RegisterOpts | undefined)?.concurrency ?? ((maybeHandlerOrOpts as RegisterOpts | undefined)?.singleton ? 1 : undefined)
       explicitEmits = (maybeHandlerOrOpts as RegisterOpts | undefined)?.emits
     } else {
       // Edge case: schema passed without handler, shouldn't happen but guard against it
@@ -50,7 +50,7 @@ export function createRegistry() {
       throw new EngineError(ErrorCode.INVALID_CONFIG, `maxRetries must be >= 0, got ${retry.maxRetries}`)
     }
 
-    const def: ProcessDefinition = { name, eventName, handler, schema, retry, version, singleton, ...(explicitEmits && explicitEmits.length > 0 && { emits: explicitEmits }) }
+    const def: ProcessDefinition = { name, eventName, handler, schema, retry, version, concurrency, ...(explicitEmits && explicitEmits.length > 0 && { emits: explicitEmits }) }
     byName.set(name, def)
 
     const list = byEvent.get(eventName) ?? []

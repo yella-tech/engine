@@ -78,7 +78,7 @@ describe('createBus', () => {
       expect(store.getAll()).toHaveLength(2)
     })
 
-    it('does not rely on stale hasActiveRun reads for singleton admission', () => {
+    it('does not rely on stale hasActiveRun reads for concurrency admission', () => {
       const baseStore = createRunStore()
       const originalCreate = baseStore.create
       const staleStore: RunStore = {
@@ -96,7 +96,7 @@ describe('createBus', () => {
         emitEvent: () => {},
       })
 
-      registry.register('singleton-proc', 'evt', async () => ({ success: true }), { singleton: true })
+      registry.register('limited-proc', 'evt', async () => ({ success: true }), { concurrency: 1 })
 
       const first = staleBus.enqueue('evt', 'a')
       const second = staleBus.enqueue('evt', 'b')

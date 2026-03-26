@@ -236,6 +236,25 @@ const migrations: ((db: Database.Database) => void)[] = [
       GROUP BY event_name, idempotency_key;
     `)
   },
+  // Migration 10 → 11: singleton → concurrency limits
+  (db) => {
+    db.exec(`
+      ALTER TABLE run_singleton_meta RENAME TO run_concurrency_meta;
+      DROP TABLE active_singletons;
+      CREATE TABLE active_concurrency (
+        process_name      TEXT NOT NULL,
+        run_id            TEXT NOT NULL UNIQUE,
+        PRIMARY KEY (process_name, run_id)
+      );
+    `)
+    db.exec(`
+      INSERT OR IGNORE INTO active_concurrency (process_name, run_id)
+      SELECT m.process_name, m.run_id
+      FROM run_concurrency_meta m
+      JOIN runs r ON r.id = m.run_id
+      WHERE r.state IN ('idle', 'running')
+    `)
+  },
 ]
 
 function applyMigrations(db: Database.Database) {
@@ -279,15 +298,16 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
       VALUES (?, ?, ?)
       ON CONFLICT(event_name, idempotency_key) DO NOTHING
     `),
-    insertSingletonMeta: db.prepare('INSERT INTO run_singleton_meta (run_id, process_name) VALUES (?, ?)'),
-    claimSingleton: db.prepare(`
-      INSERT INTO active_singletons (process_name, run_id)
+    insertConcurrencyMeta: db.prepare('INSERT INTO run_concurrency_meta (run_id, process_name) VALUES (?, ?)'),
+    claimConcurrency: db.prepare(`
+      INSERT INTO active_concurrency (process_name, run_id)
       VALUES (?, ?)
-      ON CONFLICT(process_name) DO NOTHING
+      ON CONFLICT(process_name, run_id) DO NOTHING
     `),
-    getSingletonProcessByRunId: db.prepare('SELECT process_name FROM run_singleton_meta WHERE run_id = ?'),
-    releaseSingletonByRunId: db.prepare('DELETE FROM active_singletons WHERE run_id = ?'),
-    deleteSingletonMetaByRunId: db.prepare('DELETE FROM run_singleton_meta WHERE run_id = ?'),
+    countActiveForProcess: db.prepare('SELECT COUNT(*) as cnt FROM active_concurrency WHERE process_name = ?'),
+    getConcurrencyProcessByRunId: db.prepare('SELECT process_name FROM run_concurrency_meta WHERE run_id = ?'),
+    releaseConcurrencyByRunId: db.prepare('DELETE FROM active_concurrency WHERE run_id = ?'),
+    deleteConcurrencyMetaByRunId: db.prepare('DELETE FROM run_concurrency_meta WHERE run_id = ?'),
     getByProcess: db.prepare('SELECT * FROM runs WHERE process_name = ?'),
     getByState: db.prepare('SELECT * FROM runs WHERE state = ?'),
     getAll: db.prepare('SELECT * FROM runs'),
@@ -347,23 +367,20 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     deleteById: db.prepare('DELETE FROM runs WHERE id = ?'),
   }
 
-  function syncSingletonForStateChange(runId: string, currentState: ProcessState, nextState: ProcessState): void {
-    const singletonRow = stmts.getSingletonProcessByRunId.get(runId) as { process_name: string } | undefined
-    if (!singletonRow) return
+  function syncConcurrencyForStateChange(runId: string, currentState: ProcessState, nextState: ProcessState): void {
+    const row = stmts.getConcurrencyProcessByRunId.get(runId) as { process_name: string } | undefined
+    if (!row) return
 
     const wasActive = currentState === 'idle' || currentState === 'running'
     const willBeActive = nextState === 'idle' || nextState === 'running'
 
     if (!wasActive && willBeActive) {
-      const claim = stmts.claimSingleton.run(singletonRow.process_name, runId)
-      if (claim.changes === 0) {
-        throw new Error(`Singleton already active: ${singletonRow.process_name}`)
-      }
+      stmts.claimConcurrency.run(row.process_name, runId)
       return
     }
 
     if (wasActive && !willBeActive) {
-      stmts.releaseSingletonByRunId.run(runId)
+      stmts.releaseConcurrencyByRunId.run(runId)
     }
   }
 
@@ -461,11 +478,14 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
 
       for (const request of batch) {
         const id = crypto.randomUUID()
-        if (request.singleton) {
-          if (stmts.hasActiveRun.get(request.processName) !== undefined) continue
-          const claim = stmts.claimSingleton.run(request.processName, id)
+        if (request.concurrency !== undefined) {
+          const countRow = stmts.countActiveForProcess.get(request.processName) as { cnt: number }
+          if (countRow.cnt >= request.concurrency) continue
+          // Fallback for legacy runs created before concurrency tracking
+          if (countRow.cnt === 0 && stmts.hasActiveRun.get(request.processName) !== undefined) continue
+          const claim = stmts.claimConcurrency.run(request.processName, id)
           if (claim.changes === 0) continue
-          stmts.insertSingletonMeta.run(id, request.processName)
+          stmts.insertConcurrencyMeta.run(id, request.processName)
         }
         creatable.push({ id, request })
       }
@@ -509,7 +529,7 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
       throw new Error(`Invalid transition: ${currentState} → ${state}`)
     }
 
-    syncSingletonForStateChange(runId, currentState, state)
+    syncConcurrencyForStateChange(runId, currentState, state)
     const timeline: TimelineEntry[] = JSON.parse(row.timeline)
     const entry: TimelineEntry = { state, timestamp: Date.now() }
     if (meta?.error) entry.error = meta.error
@@ -807,8 +827,8 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
       }
 
       for (const runId of prunedIds) {
-        stmts.releaseSingletonByRunId.run(runId)
-        stmts.deleteSingletonMetaByRunId.run(runId)
+        stmts.releaseConcurrencyByRunId.run(runId)
+        stmts.deleteConcurrencyMetaByRunId.run(runId)
         stmts.clearParentRunIds.run(runId)
         stmts.deleteById.run(runId)
       }

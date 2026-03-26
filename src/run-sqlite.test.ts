@@ -10,8 +10,8 @@ function downgradeSchemaToV9(dbPath: string): void {
   const db = new Database(dbPath)
   db.exec(`
     DROP TABLE run_emissions;
-    DROP TABLE run_singleton_meta;
-    DROP TABLE active_singletons;
+    DROP TABLE run_concurrency_meta;
+    DROP TABLE active_concurrency;
     PRAGMA user_version = 9;
   `)
   db.close()
@@ -641,10 +641,10 @@ describe('createSqliteRunStore', () => {
       } catch {}
     })
 
-    it('preserves singleton admission against legacy active runs', () => {
-      const dbPath = path.join(os.tmpdir(), `run-sqlite-migration-singleton-${Date.now()}.db`)
+    it('preserves concurrency admission against legacy active runs', () => {
+      const dbPath = path.join(os.tmpdir(), `run-sqlite-migration-concurrency-${Date.now()}.db`)
       const legacyStore = createSqliteRunStore(dbPath)
-      legacyStore.create('singleton-proc', 'evt', null)
+      legacyStore.create('limited-proc', 'evt', null)
       legacyStore.claimIdle(1, 'owner-1', 30_000)
       legacyStore.close?.()
       downgradeSchemaToV9(dbPath)
@@ -652,10 +652,10 @@ describe('createSqliteRunStore', () => {
       const migratedStore = createSqliteRunStore(dbPath)
       const duplicate = migratedStore.createMany([
         {
-          processName: 'singleton-proc',
+          processName: 'limited-proc',
           eventName: 'evt',
           payload: null,
-          singleton: true,
+          concurrency: 1,
         },
       ])
 

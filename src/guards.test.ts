@@ -162,7 +162,7 @@ describe('chain depth limit', () => {
 
 // ── Active-Process Dedup ──
 
-describe('singleton process', () => {
+describe('concurrency limits', () => {
   function engineTests(label: string, opts: EngineOptions) {
     describe(label, () => {
       let engine: ReturnType<typeof createEngine>
@@ -177,7 +177,7 @@ describe('singleton process', () => {
             await new Promise((r) => setTimeout(r, 50))
             return { success: true }
           },
-          { singleton: true },
+          { concurrency: 1 },
         )
 
         const first = engine.emit('evt', 'a')
@@ -192,7 +192,7 @@ describe('singleton process', () => {
 
       it('allows re-emit after first completes', async () => {
         engine = createEngine(opts)
-        engine.register('proc', 'evt', async () => ({ success: true }), { singleton: true })
+        engine.register('proc', 'evt', async () => ({ success: true }), { concurrency: 1 })
 
         engine.emit('evt', 'a')
         await engine.drain()
@@ -204,7 +204,7 @@ describe('singleton process', () => {
         expect(engine.getCompleted()).toHaveLength(2)
       })
 
-      it('only the singleton process is skipped, non-singleton on same event still fires', async () => {
+      it('only the concurrency-limited process is skipped, unlimited on same event still fires', async () => {
         engine = createEngine(opts)
         engine.register(
           'procA',
@@ -213,7 +213,7 @@ describe('singleton process', () => {
             await new Promise((r) => setTimeout(r, 100))
             return { success: true }
           },
-          { singleton: true },
+          { concurrency: 1 },
         )
         engine.register('procB', 'evt', async () => ({ success: true }))
 
@@ -224,14 +224,14 @@ describe('singleton process', () => {
         await new Promise((r) => setTimeout(r, 30))
 
         const second = engine.emit('evt', 'y')
-        // procA is skipped (singleton, still active), procB fires normally
+        // procA is skipped (concurrency: 1, still active), procB fires normally
         expect(second).toHaveLength(1)
         expect(second[0].processName).toBe('procB')
 
         await engine.drain()
       })
 
-      it('non-singleton processes allow concurrent runs by default', async () => {
+      it('processes without concurrency limit allow concurrent runs by default', async () => {
         engine = createEngine(opts)
         engine.register('proc', 'evt', async () => {
           await new Promise((r) => setTimeout(r, 50))
@@ -246,6 +246,52 @@ describe('singleton process', () => {
 
         await engine.drain()
         expect(engine.getCompleted()).toHaveLength(2)
+      })
+
+      it('concurrency: 2 allows two concurrent runs but rejects third', async () => {
+        engine = createEngine(opts)
+        engine.register(
+          'limited',
+          'evt',
+          async () => {
+            await new Promise((r) => setTimeout(r, 50))
+            return { success: true }
+          },
+          { concurrency: 2 },
+        )
+
+        const first = engine.emit('evt', 'a')
+        const second = engine.emit('evt', 'b')
+        const third = engine.emit('evt', 'c')
+
+        expect(first).toHaveLength(1)
+        expect(second).toHaveLength(1)
+        expect(third).toHaveLength(0)
+
+        await engine.drain()
+        expect(engine.getCompleted()).toHaveLength(2)
+      })
+
+      it('concurrency: 2 allows new run after one completes', async () => {
+        engine = createEngine(opts)
+        engine.register(
+          'limited',
+          'evt',
+          async () => {
+            await new Promise((r) => setTimeout(r, 20))
+            return { success: true }
+          },
+          { concurrency: 2 },
+        )
+
+        engine.emit('evt', 'a')
+        engine.emit('evt', 'b')
+        await engine.drain()
+
+        const third = engine.emit('evt', 'c')
+        expect(third).toHaveLength(1)
+        await engine.drain()
+        expect(engine.getCompleted()).toHaveLength(3)
       })
     })
   }

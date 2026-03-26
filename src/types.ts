@@ -362,7 +362,9 @@ export type ProcessDefinitionConfig<T = unknown> = {
   retry?: RetryPolicy
   /** Optional version string for handler versioning and migration. */
   version?: string
-  /** When true, only one run of this process may be active (idle or running) at a time. Admission is enforced atomically by the store and additional matching events are dropped. @defaultValue false */
+  /** Maximum number of concurrent active runs (idle or running) allowed for this process. When the limit is reached, additional matching events are dropped. `1` means only one run at a time (equivalent to the old `singleton: true`). Omit or set to `undefined` for unlimited. */
+  concurrency?: number
+  /** @deprecated Use `concurrency: 1` instead. Alias for `concurrency: 1`. */
   singleton?: boolean
   /**
    * Event names this process may emit via `triggerEvent` in the handler result.
@@ -453,8 +455,8 @@ export type ProcessDefinition = {
   retry?: RetryPolicy
   /** Optional version string for handler versioning and migration. */
   version?: string
-  /** When true, only one run of this process may be active (idle or running) at a time. Admission is enforced atomically by the store. @defaultValue false */
-  singleton?: boolean
+  /** Maximum number of concurrent active runs (idle or running) allowed. Omit for unlimited. Resolved from `singleton` if provided. */
+  concurrency?: number
   /**
    * Event names this process may emit via `triggerEvent`.
    * Declared explicitly via the `emits` registration option.
@@ -475,7 +477,7 @@ export type RunCreateRequest = {
   context?: Record<string, unknown>
   depth?: number
   idempotencyKey?: string | null
-  singleton?: boolean
+  concurrency?: number
 }
 
 /**
@@ -494,7 +496,7 @@ export type RunStore = {
     depth?: number,
     idempotencyKey?: string | null,
   ): Run
-  /** Atomically create runs for a single emitted event, applying event-scoped idempotency and singleton admission in one store operation. */
+  /** Atomically create runs for a single emitted event, applying event-scoped idempotency and concurrency admission in one store operation. */
   createMany(requests: RunCreateRequest[]): Run[]
   /** Transition a run to a new state, recording metadata in the timeline. */
   transition(runId: string, state: ProcessState, meta?: { error?: string; event?: string; payload?: unknown }): Run
@@ -625,9 +627,9 @@ export interface Engine {
    * @param name - Unique process name.
    * @param eventName - The event to listen for.
    * @param handler - The handler function.
-   * @param opts - Optional retry policy, version, singleton flag, and emits declarations.
+   * @param opts - Optional retry policy, version, concurrency limit, and emits declarations.
    */
-  register(name: string, eventName: string, handler: Handler, opts?: { retry?: RetryPolicy; version?: string; singleton?: boolean; emits?: string[] }): void
+  register(name: string, eventName: string, handler: Handler, opts?: { retry?: RetryPolicy; version?: string; concurrency?: number; singleton?: boolean; emits?: string[] }): void
 
   /**
    * Register a process handler with schema validation.
@@ -636,14 +638,14 @@ export interface Engine {
    * @param eventName - The event to listen for.
    * @param schema - Schema to validate payloads.
    * @param handler - The handler function receiving validated payloads.
-   * @param opts - Optional retry policy, version, singleton flag, and emits declarations.
+   * @param opts - Optional retry policy, version, concurrency limit, and emits declarations.
    */
   register<T>(
     name: string,
     eventName: string,
     schema: Schema<T>,
     handler: (ctx: HandlerContext<T>) => Promise<HandlerResult> | HandlerResult,
-    opts?: { retry?: RetryPolicy; version?: string; singleton?: boolean; emits?: string[] },
+    opts?: { retry?: RetryPolicy; version?: string; concurrency?: number; singleton?: boolean; emits?: string[] },
   ): void
 
   /**
@@ -677,7 +679,7 @@ export interface Engine {
    * @param eventName - The event name to emit.
    * @param payload - The event payload.
    * @param opts - Optional idempotency key. Idempotency is scoped to the emitted event name.
-   * @returns The newly created runs (empty if the engine is stopped, no handlers match, the event was already admitted for that key, or singleton admission dropped every matching process).
+   * @returns The newly created runs (empty if the engine is stopped, no handlers match, the event was already admitted for that key, or concurrency admission dropped every matching process).
    */
   emit(eventName: string, payload: unknown, opts?: { idempotencyKey?: string }): Run[]
 

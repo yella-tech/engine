@@ -378,7 +378,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     dispatcher.kick()
   }
 
-  type RegisterOpts = { retry?: RetryPolicy; version?: string; singleton?: boolean; emits?: string[] }
+  type RegisterOpts = { retry?: RetryPolicy; version?: string; concurrency?: number; singleton?: boolean; emits?: string[] }
 
   function register(name: string, eventName: string, handler: Handler, opts?: RegisterOpts): void
   function register<T>(name: string, eventName: string, schema: Schema<T>, handler: (ctx: HandlerContext<T>) => Promise<HandlerResult> | HandlerResult, opts?: RegisterOpts): void
@@ -632,7 +632,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   }
 
   function process<T>(config: ProcessDefinitionConfig<T>): void {
-    const { name, on: eventName, schema, retry: retryPolicy, version, singleton, run } = config
+    const { name, on: eventName, schema, retry: retryPolicy, version, concurrency, singleton, run } = config
 
     const handler = async (ctx: HandlerContext<T>): Promise<HandlerResult> => {
       const processCtx: ProcessContext<T> = {
@@ -661,7 +661,13 @@ export function createEngine(opts: EngineOptions = {}): Engine {
       return run(processCtx)
     }
 
-    const opts = { ...(retryPolicy && { retry: retryPolicy }), ...(version && { version }), ...(singleton && { singleton }), ...(config.emits && config.emits.length > 0 && { emits: config.emits }) }
+    const resolvedConcurrency = concurrency ?? (singleton ? 1 : undefined)
+    const opts = {
+      ...(retryPolicy && { retry: retryPolicy }),
+      ...(version && { version }),
+      ...(resolvedConcurrency !== undefined && { concurrency: resolvedConcurrency }),
+      ...(config.emits && config.emits.length > 0 && { emits: config.emits }),
+    }
     if (schema) {
       register(name, eventName, schema, handler as any, Object.keys(opts).length ? opts : undefined)
     } else {
