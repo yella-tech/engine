@@ -1,0 +1,1446 @@
+[
+  {
+    "scenario": {
+      "id": "crash-recovery__mid-load__api-mixed",
+      "label": "Restart drill during API mixed load",
+      "description": "Deliberate hard restart during active load to exercise restart/recovery behavior against a live SQLite store.",
+      "family": "restart-drill",
+      "kind": "recovery",
+      "visibility": "internal",
+      "tags": [
+        "restart",
+        "recovery",
+        "api"
+      ],
+      "phases": [
+        {
+          "label": "warm-up",
+          "eventsPerSec": 16,
+          "durationSec": 10
+        },
+        {
+          "label": "active-load",
+          "eventsPerSec": 35,
+          "durationSec": 10
+        },
+        {
+          "label": "post-restart",
+          "eventsPerSec": 28,
+          "durationSec": 10
+        },
+        {
+          "label": "cool-down",
+          "eventsPerSec": 0,
+          "durationSec": 5
+        }
+      ],
+      "notes": [
+        "The runner performs a deliberate hard restart against the same SQLite database.",
+        "This is a restart drill, not a SIGKILL chaos test.",
+        "Use it to validate that the queue continues after restart and that memory settles again."
+      ],
+      "concurrency": 50
+    },
+    "startedAt": "2026-03-29T00:11:22.139Z",
+    "finishedAt": "2026-03-29T00:11:57.239Z",
+    "machine": {
+      "hostname": "lothlorien",
+      "platform": "linux",
+      "arch": "x64",
+      "cpus": 16,
+      "totalMemoryBytes": 66888458240,
+      "nodeVersion": "v24.14.0"
+    },
+    "totals": {
+      "seedAttempts": 773,
+      "seedAdmitted": 773,
+      "seedDropped": 0,
+      "runsCompleted": 1893,
+      "runsErrored": 7,
+      "retries": 18,
+      "deadLetters": 0,
+      "effectReplays": 0,
+      "restarts": 0,
+      "sqliteErrors": 0,
+      "throughputAvg": 54
+    },
+    "durations": {
+      "count": 1900,
+      "sumMs": 416877,
+      "minMs": 7,
+      "maxMs": 2795,
+      "avgMs": 219.40894736842105,
+      "p50Ms": 100,
+      "p95Ms": 1000,
+      "histogram": {
+        "le10ms": 36,
+        "le50ms": 650,
+        "le100ms": 458,
+        "le250ms": 81,
+        "le500ms": 447,
+        "le1000ms": 179,
+        "le2500ms": 48,
+        "le5000ms": 1,
+        "le10000ms": 0,
+        "gt10000ms": 0
+      }
+    },
+    "memory": {
+      "peakRssBytes": 120905728,
+      "finalRssBytes": 123305984,
+      "peakQueueDepth": 22,
+      "dbFileBytes": 1949696,
+      "walFileBytes": 4165352
+    },
+    "effects": {
+      "completed": 706,
+      "errored": 0,
+      "replayed": 0
+    },
+    "byEvent": {
+      "billing:sync-requested": {
+        "attempted": 227,
+        "admitted": 227,
+        "dropped": 0
+      },
+      "webhook:received": {
+        "attempted": 364,
+        "admitted": 364,
+        "dropped": 0
+      },
+      "document:index-requested": {
+        "attempted": 121,
+        "admitted": 121,
+        "dropped": 0
+      },
+      "approval:needed": {
+        "attempted": 61,
+        "admitted": 61,
+        "dropped": 0
+      }
+    },
+    "reportFiles": {
+      "text": "examples/reports/benchmarks/crash-recovery__mid-load__api-mixed__20260329-101157.txt",
+      "json": "examples/reports/benchmarks/crash-recovery__mid-load__api-mixed__20260329-101157.json"
+    }
+  },
+  {
+    "scenario": {
+      "id": "api-mixed__fleet-c20",
+      "label": "API mixed workload (fleet concurrency 20)",
+      "description": "Mixed webhook, billing, document, and approval automation with retries, outliers, and durable effects.",
+      "family": "api-mixed",
+      "kind": "benchmark",
+      "visibility": "public",
+      "tags": [
+        "sqlite",
+        "wal",
+        "retries",
+        "concurrency-sweep"
+      ],
+      "phases": [
+        {
+          "label": "warm-up",
+          "eventsPerSec": 2,
+          "durationSec": 10
+        },
+        {
+          "label": "steady",
+          "eventsPerSec": 4,
+          "durationSec": 10
+        },
+        {
+          "label": "peak",
+          "eventsPerSec": 8,
+          "durationSec": 10
+        },
+        {
+          "label": "cool-down",
+          "eventsPerSec": 0,
+          "durationSec": 5
+        }
+      ],
+      "notes": [
+        "Global concurrency is the only limit in this scenario.",
+        "Root events fan out into 2-3 stage chains with durable effects.",
+        "This is the public benchmark family used for the site performance page."
+      ],
+      "concurrency": 20
+    },
+    "startedAt": "2026-03-29T00:11:22.145Z",
+    "finishedAt": "2026-03-29T00:11:57.414Z",
+    "machine": {
+      "hostname": "lothlorien",
+      "platform": "linux",
+      "arch": "x64",
+      "cpus": 16,
+      "totalMemoryBytes": 66888458240,
+      "nodeVersion": "v24.14.0"
+    },
+    "totals": {
+      "seedAttempts": 140,
+      "seedAdmitted": 140,
+      "seedDropped": 0,
+      "runsCompleted": 339,
+      "runsErrored": 1,
+      "retries": 3,
+      "deadLetters": 0,
+      "effectReplays": 0,
+      "restarts": 0,
+      "sqliteErrors": 0,
+      "throughputAvg": 10
+    },
+    "durations": {
+      "count": 340,
+      "sumMs": 75157,
+      "minMs": 8,
+      "maxMs": 2009,
+      "avgMs": 221.05,
+      "p50Ms": 100,
+      "p95Ms": 1000,
+      "histogram": {
+        "le10ms": 7,
+        "le50ms": 108,
+        "le100ms": 84,
+        "le250ms": 17,
+        "le500ms": 92,
+        "le1000ms": 22,
+        "le2500ms": 10,
+        "le5000ms": 0,
+        "le10000ms": 0,
+        "gt10000ms": 0
+      }
+    },
+    "memory": {
+      "peakRssBytes": 111423488,
+      "finalRssBytes": 113950720,
+      "peakQueueDepth": 6,
+      "dbFileBytes": 401408,
+      "walFileBytes": 4148872
+    },
+    "effects": {
+      "completed": 128,
+      "errored": 0,
+      "replayed": 0
+    },
+    "byEvent": {
+      "webhook:received": {
+        "attempted": 62,
+        "admitted": 62,
+        "dropped": 0
+      },
+      "billing:sync-requested": {
+        "attempted": 41,
+        "admitted": 41,
+        "dropped": 0
+      },
+      "document:index-requested": {
+        "attempted": 26,
+        "admitted": 26,
+        "dropped": 0
+      },
+      "approval:needed": {
+        "attempted": 11,
+        "admitted": 11,
+        "dropped": 0
+      }
+    },
+    "reportFiles": {
+      "text": "examples/reports/benchmarks/api-mixed__fleet-c20__20260329-101157.txt",
+      "json": "examples/reports/benchmarks/api-mixed__fleet-c20__20260329-101157.json"
+    }
+  },
+  {
+    "scenario": {
+      "id": "crash-recovery__mid-load__api-mixed",
+      "label": "Restart drill during API mixed load",
+      "description": "Deliberate hard restart during active load to exercise restart/recovery behavior against a live SQLite store.",
+      "family": "restart-drill",
+      "kind": "recovery",
+      "visibility": "internal",
+      "tags": [
+        "restart",
+        "recovery",
+        "api"
+      ],
+      "phases": [
+        {
+          "label": "warm-up",
+          "eventsPerSec": 16,
+          "durationSec": 10
+        },
+        {
+          "label": "active-load",
+          "eventsPerSec": 35,
+          "durationSec": 10
+        },
+        {
+          "label": "post-restart",
+          "eventsPerSec": 28,
+          "durationSec": 10
+        },
+        {
+          "label": "cool-down",
+          "eventsPerSec": 0,
+          "durationSec": 5
+        }
+      ],
+      "notes": [
+        "The runner performs a deliberate hard restart against the same SQLite database.",
+        "This is a restart drill, not a SIGKILL chaos test.",
+        "Use it to validate that the queue continues after restart and that memory settles again."
+      ],
+      "concurrency": 50
+    },
+    "startedAt": "2026-03-29T00:12:42.494Z",
+    "finishedAt": "2026-03-29T00:13:17.567Z",
+    "machine": {
+      "hostname": "lothlorien",
+      "platform": "linux",
+      "arch": "x64",
+      "cpus": 16,
+      "totalMemoryBytes": 66888458240,
+      "nodeVersion": "v24.14.0"
+    },
+    "totals": {
+      "seedAttempts": 772,
+      "seedAdmitted": 772,
+      "seedDropped": 0,
+      "runsCompleted": 1855,
+      "runsErrored": 10,
+      "retries": 15,
+      "deadLetters": 0,
+      "effectReplays": 0,
+      "restarts": 1,
+      "sqliteErrors": 0,
+      "throughputAvg": 53
+    },
+    "durations": {
+      "count": 1865,
+      "sumMs": 389235,
+      "minMs": 7,
+      "maxMs": 2120,
+      "avgMs": 208.70509383378015,
+      "p50Ms": 100,
+      "p95Ms": 1000,
+      "histogram": {
+        "le10ms": 29,
+        "le50ms": 650,
+        "le100ms": 453,
+        "le250ms": 80,
+        "le500ms": 436,
+        "le1000ms": 179,
+        "le2500ms": 38,
+        "le5000ms": 0,
+        "le10000ms": 0,
+        "gt10000ms": 0
+      }
+    },
+    "memory": {
+      "peakRssBytes": 149319680,
+      "finalRssBytes": 151715840,
+      "peakQueueDepth": 20,
+      "dbFileBytes": 1908736,
+      "walFileBytes": 4165352
+    },
+    "effects": {
+      "completed": 694,
+      "errored": 0,
+      "replayed": 0
+    },
+    "byEvent": {
+      "approval:needed": {
+        "attempted": 69,
+        "admitted": 69,
+        "dropped": 0
+      },
+      "webhook:received": {
+        "attempted": 338,
+        "admitted": 338,
+        "dropped": 0
+      },
+      "document:index-requested": {
+        "attempted": 135,
+        "admitted": 135,
+        "dropped": 0
+      },
+      "billing:sync-requested": {
+        "attempted": 230,
+        "admitted": 230,
+        "dropped": 0
+      }
+    },
+    "reportFiles": {
+      "text": "examples/reports/benchmarks/crash-recovery__mid-load__api-mixed__20260329-101317.txt",
+      "json": "examples/reports/benchmarks/crash-recovery__mid-load__api-mixed__20260329-101317.json"
+    }
+  },
+  {
+    "scenario": {
+      "id": "burst-recovery__fleet-c50",
+      "label": "Burst recovery (fleet concurrency 50)",
+      "description": "Steady load, sharp burst, then recovery to show queue build-up and drain behavior.",
+      "family": "burst-recovery",
+      "kind": "benchmark",
+      "visibility": "internal",
+      "tags": [
+        "burst",
+        "recovery",
+        "api"
+      ],
+      "phases": [
+        {
+          "label": "steady",
+          "eventsPerSec": 20,
+          "durationSec": 60
+        },
+        {
+          "label": "surge",
+          "eventsPerSec": 55,
+          "durationSec": 60
+        },
+        {
+          "label": "spike",
+          "eventsPerSec": 90,
+          "durationSec": 60
+        },
+        {
+          "label": "recovery",
+          "eventsPerSec": 15,
+          "durationSec": 60
+        },
+        {
+          "label": "cool-down",
+          "eventsPerSec": 0,
+          "durationSec": 60
+        }
+      ],
+      "notes": [
+        "The queue should grow during the surge and spike phases.",
+        "The important signal is whether the system drains and stabilizes when the rate falls."
+      ],
+      "concurrency": 50
+    },
+    "startedAt": "2026-03-29T02:59:50.580Z",
+    "finishedAt": "2026-03-29T03:04:50.854Z",
+    "machine": {
+      "hostname": "lothlorien",
+      "platform": "linux",
+      "arch": "x64",
+      "cpus": 16,
+      "totalMemoryBytes": 66888458240,
+      "nodeVersion": "v24.14.0"
+    },
+    "totals": {
+      "seedAttempts": 9697,
+      "seedAdmitted": 9697,
+      "seedDropped": 0,
+      "runsCompleted": 23651,
+      "runsErrored": 59,
+      "retries": 230,
+      "deadLetters": 0,
+      "effectReplays": 0,
+      "restarts": 0,
+      "sqliteErrors": 0,
+      "throughputAvg": 79
+    },
+    "durations": {
+      "count": 23710,
+      "sumMs": 5069463,
+      "minMs": 7,
+      "maxMs": 3251,
+      "avgMs": 213.8111767186841,
+      "p50Ms": 100,
+      "p95Ms": 1000,
+      "histogram": {
+        "le10ms": 370,
+        "le50ms": 8350,
+        "le100ms": 5709,
+        "le250ms": 980,
+        "le500ms": 5599,
+        "le1000ms": 2094,
+        "le2500ms": 602,
+        "le5000ms": 6,
+        "le10000ms": 0,
+        "gt10000ms": 0
+      }
+    },
+    "memory": {
+      "peakRssBytes": 185020416,
+      "finalRssBytes": 129363968,
+      "peakQueueDepth": 47,
+      "dbFileBytes": 23408640,
+      "walFileBytes": 4190072
+    },
+    "effects": {
+      "completed": 8759,
+      "errored": 0,
+      "replayed": 0
+    },
+    "byEvent": {
+      "document:index-requested": {
+        "attempted": 1765,
+        "admitted": 1765,
+        "dropped": 0
+      },
+      "webhook:received": {
+        "attempted": 4405,
+        "admitted": 4405,
+        "dropped": 0
+      },
+      "billing:sync-requested": {
+        "attempted": 2641,
+        "admitted": 2641,
+        "dropped": 0
+      },
+      "approval:needed": {
+        "attempted": 886,
+        "admitted": 886,
+        "dropped": 0
+      }
+    },
+    "reportFiles": {
+      "text": "examples/reports/benchmarks/burst-recovery__fleet-c50__20260329-130450.txt",
+      "json": "examples/reports/benchmarks/burst-recovery__fleet-c50__20260329-130450.json"
+    }
+  },
+  {
+    "scenario": {
+      "id": "burst-recovery__scraper-capped",
+      "label": "Burst recovery with capped scraper",
+      "description": "Steady load, sharp burst, then recovery to show queue build-up and drain behavior.",
+      "family": "burst-recovery",
+      "kind": "benchmark",
+      "visibility": "internal",
+      "tags": [
+        "burst",
+        "recovery",
+        "scraper"
+      ],
+      "phases": [
+        {
+          "label": "steady",
+          "eventsPerSec": 12,
+          "durationSec": 60
+        },
+        {
+          "label": "surge",
+          "eventsPerSec": 28,
+          "durationSec": 60
+        },
+        {
+          "label": "spike",
+          "eventsPerSec": 45,
+          "durationSec": 60
+        },
+        {
+          "label": "recovery",
+          "eventsPerSec": 10,
+          "durationSec": 60
+        },
+        {
+          "label": "cool-down",
+          "eventsPerSec": 0,
+          "durationSec": 60
+        }
+      ],
+      "notes": [
+        "The queue should grow during the surge and spike phases.",
+        "The important signal is whether the system drains and stabilizes when the rate falls.",
+        "The scraper cap should keep RSS steadier during the spike."
+      ],
+      "concurrency": 50
+    },
+    "startedAt": "2026-03-29T03:04:50.917Z",
+    "finishedAt": "2026-03-29T03:09:51.161Z",
+    "machine": {
+      "hostname": "lothlorien",
+      "platform": "linux",
+      "arch": "x64",
+      "cpus": 16,
+      "totalMemoryBytes": 66888458240,
+      "nodeVersion": "v24.14.0"
+    },
+    "totals": {
+      "seedAttempts": 5330,
+      "seedAdmitted": 4907,
+      "seedDropped": 423,
+      "runsCompleted": 11702,
+      "runsErrored": 23,
+      "retries": 125,
+      "deadLetters": 0,
+      "effectReplays": 0,
+      "restarts": 0,
+      "sqliteErrors": 0,
+      "throughputAvg": 39
+    },
+    "durations": {
+      "count": 11725,
+      "sumMs": 3073551,
+      "minMs": 7,
+      "maxMs": 3097,
+      "avgMs": 262.13654584221746,
+      "p50Ms": 100,
+      "p95Ms": 2500,
+      "histogram": {
+        "le10ms": 180,
+        "le50ms": 3967,
+        "le100ms": 2845,
+        "le250ms": 408,
+        "le500ms": 2460,
+        "le1000ms": 1053,
+        "le2500ms": 810,
+        "le5000ms": 2,
+        "le10000ms": 0,
+        "gt10000ms": 0
+      }
+    },
+    "memory": {
+      "peakRssBytes": 357597184,
+      "finalRssBytes": 257064960,
+      "peakQueueDepth": 28,
+      "dbFileBytes": 11735040,
+      "walFileBytes": 4198312
+    },
+    "effects": {
+      "completed": 4501,
+      "errored": 0,
+      "replayed": 0
+    },
+    "byEvent": {
+      "approval:needed": {
+        "attempted": 383,
+        "admitted": 383,
+        "dropped": 0
+      },
+      "webhook:received": {
+        "attempted": 1949,
+        "admitted": 1949,
+        "dropped": 0
+      },
+      "billing:sync-requested": {
+        "attempted": 1167,
+        "admitted": 1167,
+        "dropped": 0
+      },
+      "document:index-requested": {
+        "attempted": 758,
+        "admitted": 758,
+        "dropped": 0
+      },
+      "page:scrape-requested": {
+        "attempted": 1073,
+        "admitted": 650,
+        "dropped": 423
+      }
+    },
+    "reportFiles": {
+      "text": "examples/reports/benchmarks/burst-recovery__scraper-capped__20260329-130951.txt",
+      "json": "examples/reports/benchmarks/burst-recovery__scraper-capped__20260329-130951.json"
+    }
+  },
+  {
+    "scenario": {
+      "id": "degraded-downstream__api-mixed",
+      "label": "Degraded downstream (API mixed)",
+      "description": "Injects slower calls and rate-limited downstream behavior to show retries, dead letters, and degraded throughput.",
+      "family": "degraded-downstream",
+      "kind": "benchmark",
+      "visibility": "internal",
+      "tags": [
+        "degradation",
+        "retries",
+        "api"
+      ],
+      "phases": [
+        {
+          "label": "healthy",
+          "eventsPerSec": 22,
+          "durationSec": 60
+        },
+        {
+          "label": "slow",
+          "eventsPerSec": 30,
+          "durationSec": 60
+        },
+        {
+          "label": "rate-limited",
+          "eventsPerSec": 30,
+          "durationSec": 60
+        },
+        {
+          "label": "recovering",
+          "eventsPerSec": 22,
+          "durationSec": 60
+        },
+        {
+          "label": "cool-down",
+          "eventsPerSec": 0,
+          "durationSec": 60
+        }
+      ],
+      "notes": [
+        "The workload deliberately changes downstream conditions by phase.",
+        "This scenario exists to show retry recovery versus terminal failure behavior."
+      ],
+      "concurrency": 50
+    },
+    "startedAt": "2026-03-29T03:09:51.171Z",
+    "finishedAt": "2026-03-29T03:14:51.402Z",
+    "machine": {
+      "hostname": "lothlorien",
+      "platform": "linux",
+      "arch": "x64",
+      "cpus": 16,
+      "totalMemoryBytes": 66888458240,
+      "nodeVersion": "v24.14.0"
+    },
+    "totals": {
+      "seedAttempts": 6011,
+      "seedAdmitted": 6011,
+      "seedDropped": 0,
+      "runsCompleted": 14636,
+      "runsErrored": 54,
+      "retries": 268,
+      "deadLetters": 1,
+      "effectReplays": 0,
+      "restarts": 0,
+      "sqliteErrors": 0,
+      "throughputAvg": 49
+    },
+    "durations": {
+      "count": 14690,
+      "sumMs": 7264501,
+      "minMs": 7,
+      "maxMs": 8949,
+      "avgMs": 494.5201497617427,
+      "p50Ms": 250,
+      "p95Ms": 2500,
+      "histogram": {
+        "le10ms": 218,
+        "le50ms": 4646,
+        "le100ms": 2392,
+        "le250ms": 1512,
+        "le500ms": 1510,
+        "le1000ms": 2285,
+        "le2500ms": 1550,
+        "le5000ms": 485,
+        "le10000ms": 92,
+        "gt10000ms": 0
+      }
+    },
+    "memory": {
+      "peakRssBytes": 292978688,
+      "finalRssBytes": 167677952,
+      "peakQueueDepth": 118,
+      "dbFileBytes": 14725120,
+      "walFileBytes": 4181832
+    },
+    "effects": {
+      "completed": 5423,
+      "errored": 0,
+      "replayed": 0
+    },
+    "byEvent": {
+      "billing:sync-requested": {
+        "attempted": 1632,
+        "admitted": 1632,
+        "dropped": 0
+      },
+      "document:index-requested": {
+        "attempted": 1091,
+        "admitted": 1091,
+        "dropped": 0
+      },
+      "webhook:received": {
+        "attempted": 2749,
+        "admitted": 2749,
+        "dropped": 0
+      },
+      "approval:needed": {
+        "attempted": 539,
+        "admitted": 539,
+        "dropped": 0
+      }
+    },
+    "reportFiles": {
+      "text": "examples/reports/benchmarks/degraded-downstream__api-mixed__20260329-131451.txt",
+      "json": "examples/reports/benchmarks/degraded-downstream__api-mixed__20260329-131451.json"
+    }
+  },
+  {
+    "scenario": {
+      "id": "degraded-downstream__scraper-capped",
+      "label": "Degraded downstream with capped scraper",
+      "description": "Injects slower calls and rate-limited downstream behavior to show retries, dead letters, and degraded throughput.",
+      "family": "degraded-downstream",
+      "kind": "benchmark",
+      "visibility": "internal",
+      "tags": [
+        "degradation",
+        "retries",
+        "scraper"
+      ],
+      "phases": [
+        {
+          "label": "healthy",
+          "eventsPerSec": 14,
+          "durationSec": 60
+        },
+        {
+          "label": "slow",
+          "eventsPerSec": 18,
+          "durationSec": 60
+        },
+        {
+          "label": "rate-limited",
+          "eventsPerSec": 18,
+          "durationSec": 60
+        },
+        {
+          "label": "recovering",
+          "eventsPerSec": 14,
+          "durationSec": 60
+        },
+        {
+          "label": "cool-down",
+          "eventsPerSec": 0,
+          "durationSec": 60
+        }
+      ],
+      "notes": [
+        "The workload deliberately changes downstream conditions by phase.",
+        "This scenario exists to show retry recovery versus terminal failure behavior.",
+        "Expensive browser tasks remain capped while downstream APIs degrade."
+      ],
+      "concurrency": 40
+    },
+    "startedAt": "2026-03-29T03:14:51.455Z",
+    "finishedAt": "2026-03-29T03:19:51.818Z",
+    "machine": {
+      "hostname": "lothlorien",
+      "platform": "linux",
+      "arch": "x64",
+      "cpus": 16,
+      "totalMemoryBytes": 66888458240,
+      "nodeVersion": "v24.14.0"
+    },
+    "totals": {
+      "seedAttempts": 3695,
+      "seedAdmitted": 3542,
+      "seedDropped": 153,
+      "runsCompleted": 8462,
+      "runsErrored": 20,
+      "retries": 134,
+      "deadLetters": 0,
+      "effectReplays": 0,
+      "restarts": 0,
+      "sqliteErrors": 0,
+      "throughputAvg": 28
+    },
+    "durations": {
+      "count": 8482,
+      "sumMs": 4560912,
+      "minMs": 7,
+      "maxMs": 8186,
+      "avgMs": 537.7165762791794,
+      "p50Ms": 250,
+      "p95Ms": 2500,
+      "histogram": {
+        "le10ms": 122,
+        "le50ms": 2567,
+        "le100ms": 1487,
+        "le250ms": 814,
+        "le500ms": 793,
+        "le1000ms": 1218,
+        "le2500ms": 1086,
+        "le5000ms": 344,
+        "le10000ms": 51,
+        "gt10000ms": 0
+      }
+    },
+    "memory": {
+      "peakRssBytes": 370704384,
+      "finalRssBytes": 245772288,
+      "peakQueueDepth": 34,
+      "dbFileBytes": 8474624,
+      "walFileBytes": 4181832
+    },
+    "effects": {
+      "completed": 3253,
+      "errored": 0,
+      "replayed": 0
+    },
+    "byEvent": {
+      "page:scrape-requested": {
+        "attempted": 562,
+        "admitted": 409,
+        "dropped": 153
+      },
+      "webhook:received": {
+        "attempted": 1433,
+        "admitted": 1433,
+        "dropped": 0
+      },
+      "document:index-requested": {
+        "attempted": 576,
+        "admitted": 576,
+        "dropped": 0
+      },
+      "billing:sync-requested": {
+        "attempted": 853,
+        "admitted": 853,
+        "dropped": 0
+      },
+      "approval:needed": {
+        "attempted": 271,
+        "admitted": 271,
+        "dropped": 0
+      }
+    },
+    "reportFiles": {
+      "text": "examples/reports/benchmarks/degraded-downstream__scraper-capped__20260329-131951.txt",
+      "json": "examples/reports/benchmarks/degraded-downstream__scraper-capped__20260329-131951.json"
+    }
+  },
+  {
+    "scenario": {
+      "id": "overnight-soak__api-mixed",
+      "label": "Overnight soak (API mixed)",
+      "description": "Long-running stability test for memory, WAL growth, retries, and queue recovery.",
+      "family": "overnight-soak",
+      "kind": "soak",
+      "visibility": "internal",
+      "tags": [
+        "overnight",
+        "soak",
+        "api"
+      ],
+      "phases": [
+        {
+          "label": "warm-up",
+          "eventsPerSec": 12,
+          "durationSec": 900
+        },
+        {
+          "label": "steady-a",
+          "eventsPerSec": 18,
+          "durationSec": 5400
+        },
+        {
+          "label": "burst-a",
+          "eventsPerSec": 35,
+          "durationSec": 1800
+        },
+        {
+          "label": "steady-b",
+          "eventsPerSec": 18,
+          "durationSec": 5400
+        },
+        {
+          "label": "burst-b",
+          "eventsPerSec": 35,
+          "durationSec": 1800
+        },
+        {
+          "label": "steady-c",
+          "eventsPerSec": 18,
+          "durationSec": 5400
+        },
+        {
+          "label": "cool-down",
+          "eventsPerSec": 0,
+          "durationSec": 900
+        }
+      ],
+      "notes": [
+        "This is an internal trust test, not a site benchmark.",
+        "Run this on the same machine class you use in production.",
+        "The important signals are RSS stability, WAL/DB growth, retry counts, and whether the queue fully recovers after each burst."
+      ],
+      "concurrency": 50
+    },
+    "startedAt": "2026-03-29T03:19:51.835Z",
+    "finishedAt": "2026-03-29T09:19:52.272Z",
+    "machine": {
+      "hostname": "lothlorien",
+      "platform": "linux",
+      "arch": "x64",
+      "cpus": 16,
+      "totalMemoryBytes": 66888458240,
+      "nodeVersion": "v24.14.0"
+    },
+    "totals": {
+      "seedAttempts": 404393,
+      "seedAdmitted": 404393,
+      "seedDropped": 0,
+      "runsCompleted": 985742,
+      "runsErrored": 2606,
+      "retries": 8799,
+      "deadLetters": 4,
+      "effectReplays": 0,
+      "restarts": 0,
+      "sqliteErrors": 0,
+      "throughputAvg": 46
+    },
+    "durations": {
+      "count": 988348,
+      "sumMs": 213588308,
+      "minMs": 7,
+      "maxMs": 3560,
+      "avgMs": 216.10637953433405,
+      "p50Ms": 100,
+      "p95Ms": 1000,
+      "histogram": {
+        "le10ms": 15642,
+        "le50ms": 348935,
+        "le100ms": 230281,
+        "le250ms": 45559,
+        "le500ms": 229752,
+        "le1000ms": 92930,
+        "le2500ms": 25060,
+        "le5000ms": 189,
+        "le10000ms": 0,
+        "gt10000ms": 0
+      }
+    },
+    "memory": {
+      "peakRssBytes": 267190272,
+      "finalRssBytes": 267321344,
+      "peakQueueDepth": 28,
+      "dbFileBytes": 971485184,
+      "walFileBytes": 4198312
+    },
+    "effects": {
+      "completed": 365423,
+      "errored": 0,
+      "replayed": 0
+    },
+    "byEvent": {
+      "document:index-requested": {
+        "attempted": 73381,
+        "admitted": 73381,
+        "dropped": 0
+      },
+      "webhook:received": {
+        "attempted": 183772,
+        "admitted": 183772,
+        "dropped": 0
+      },
+      "billing:sync-requested": {
+        "attempted": 110635,
+        "admitted": 110635,
+        "dropped": 0
+      },
+      "approval:needed": {
+        "attempted": 36605,
+        "admitted": 36605,
+        "dropped": 0
+      }
+    },
+    "reportFiles": {
+      "text": "examples/reports/benchmarks/overnight-soak__api-mixed__20260329-191952.txt",
+      "json": "examples/reports/benchmarks/overnight-soak__api-mixed__20260329-191952.json"
+    }
+  },
+  {
+    "scenario": {
+      "id": "overnight-soak__scraper-bounded",
+      "label": "Overnight soak with bounded scraper",
+      "description": "Long-running stability test for memory, WAL growth, retries, and queue recovery.",
+      "family": "overnight-soak",
+      "kind": "soak",
+      "visibility": "internal",
+      "tags": [
+        "overnight",
+        "soak",
+        "scraper"
+      ],
+      "phases": [
+        {
+          "label": "warm-up",
+          "eventsPerSec": 8,
+          "durationSec": 900
+        },
+        {
+          "label": "steady-a",
+          "eventsPerSec": 12,
+          "durationSec": 5400
+        },
+        {
+          "label": "burst-a",
+          "eventsPerSec": 22,
+          "durationSec": 1800
+        },
+        {
+          "label": "steady-b",
+          "eventsPerSec": 12,
+          "durationSec": 5400
+        },
+        {
+          "label": "burst-b",
+          "eventsPerSec": 22,
+          "durationSec": 1800
+        },
+        {
+          "label": "steady-c",
+          "eventsPerSec": 12,
+          "durationSec": 5400
+        },
+        {
+          "label": "cool-down",
+          "eventsPerSec": 0,
+          "durationSec": 900
+        }
+      ],
+      "notes": [
+        "This is an internal trust test, not a site benchmark.",
+        "Run this on the same machine class you use in production.",
+        "The important signals are RSS stability, WAL/DB growth, retry counts, and whether the queue fully recovers after each burst."
+      ],
+      "concurrency": 40
+    },
+    "startedAt": "2026-03-29T09:19:52.397Z",
+    "finishedAt": "2026-03-29T15:19:52.872Z",
+    "machine": {
+      "hostname": "lothlorien",
+      "platform": "linux",
+      "arch": "x64",
+      "cpus": 16,
+      "totalMemoryBytes": 66888458240,
+      "nodeVersion": "v24.14.0"
+    },
+    "totals": {
+      "seedAttempts": 264194,
+      "seedAdmitted": 261445,
+      "seedDropped": 2749,
+      "runsCompleted": 621083,
+      "runsErrored": 1415,
+      "retries": 5716,
+      "deadLetters": 2,
+      "effectReplays": 0,
+      "restarts": 0,
+      "sqliteErrors": 0,
+      "throughputAvg": 29
+    },
+    "durations": {
+      "count": 622498,
+      "sumMs": 165981607,
+      "minMs": 7,
+      "maxMs": 3556,
+      "avgMs": 266.63797634691196,
+      "p50Ms": 100,
+      "p95Ms": 2500,
+      "histogram": {
+        "le10ms": 8527,
+        "le50ms": 205951,
+        "le100ms": 152693,
+        "le250ms": 24829,
+        "le500ms": 127959,
+        "le1000ms": 56880,
+        "le2500ms": 45565,
+        "le5000ms": 94,
+        "le10000ms": 0,
+        "gt10000ms": 0
+      }
+    },
+    "memory": {
+      "peakRssBytes": 530604032,
+      "finalRssBytes": 338849792,
+      "peakQueueDepth": 20,
+      "dbFileBytes": 615460864,
+      "walFileBytes": 4206552
+    },
+    "effects": {
+      "completed": 239893,
+      "errored": 0,
+      "replayed": 0
+    },
+    "byEvent": {
+      "webhook:received": {
+        "attempted": 101891,
+        "admitted": 101891,
+        "dropped": 0
+      },
+      "billing:sync-requested": {
+        "attempted": 60889,
+        "admitted": 60889,
+        "dropped": 0
+      },
+      "page:scrape-requested": {
+        "attempted": 40547,
+        "admitted": 37798,
+        "dropped": 2749
+      },
+      "document:index-requested": {
+        "attempted": 40616,
+        "admitted": 40616,
+        "dropped": 0
+      },
+      "approval:needed": {
+        "attempted": 20251,
+        "admitted": 20251,
+        "dropped": 0
+      }
+    },
+    "reportFiles": {
+      "text": "examples/reports/benchmarks/overnight-soak__scraper-bounded__20260330-011952.txt",
+      "json": "examples/reports/benchmarks/overnight-soak__scraper-bounded__20260330-011952.json"
+    }
+  },
+  {
+    "scenario": {
+      "id": "crash-recovery__mid-load__api-mixed",
+      "label": "Restart drill during API mixed load",
+      "description": "Deliberate hard restart during active load to exercise restart/recovery behavior against a live SQLite store.",
+      "family": "restart-drill",
+      "kind": "recovery",
+      "visibility": "internal",
+      "tags": [
+        "restart",
+        "recovery",
+        "api"
+      ],
+      "phases": [
+        {
+          "label": "warm-up",
+          "eventsPerSec": 16,
+          "durationSec": 60
+        },
+        {
+          "label": "active-load",
+          "eventsPerSec": 35,
+          "durationSec": 180
+        },
+        {
+          "label": "post-restart",
+          "eventsPerSec": 28,
+          "durationSec": 120
+        },
+        {
+          "label": "cool-down",
+          "eventsPerSec": 0,
+          "durationSec": 60
+        }
+      ],
+      "notes": [
+        "The runner performs a deliberate hard restart against the same SQLite database.",
+        "This is a restart drill, not a SIGKILL chaos test.",
+        "Use it to validate that the queue continues after restart and that memory settles again."
+      ],
+      "concurrency": 50
+    },
+    "startedAt": "2026-03-29T15:19:53.014Z",
+    "finishedAt": "2026-03-29T15:26:53.249Z",
+    "machine": {
+      "hostname": "lothlorien",
+      "platform": "linux",
+      "arch": "x64",
+      "cpus": 16,
+      "totalMemoryBytes": 66888458240,
+      "nodeVersion": "v24.14.0"
+    },
+    "totals": {
+      "seedAttempts": 10166,
+      "seedAdmitted": 10166,
+      "seedDropped": 0,
+      "runsCompleted": 24773,
+      "runsErrored": 69,
+      "retries": 229,
+      "deadLetters": 5,
+      "effectReplays": 0,
+      "restarts": 1,
+      "sqliteErrors": 0,
+      "throughputAvg": 59
+    },
+    "durations": {
+      "count": 24842,
+      "sumMs": 5311688,
+      "minMs": 7,
+      "maxMs": 3314,
+      "avgMs": 213.81885516464052,
+      "p50Ms": 100,
+      "p95Ms": 1000,
+      "histogram": {
+        "le10ms": 449,
+        "le50ms": 8860,
+        "le100ms": 5815,
+        "le250ms": 1008,
+        "le500ms": 5828,
+        "le1000ms": 2264,
+        "le2500ms": 612,
+        "le5000ms": 6,
+        "le10000ms": 0,
+        "gt10000ms": 0
+      }
+    },
+    "memory": {
+      "peakRssBytes": 340230144,
+      "finalRssBytes": 288546816,
+      "peakQueueDepth": 24,
+      "dbFileBytes": 24449024,
+      "walFileBytes": 4173592
+    },
+    "effects": {
+      "completed": 9169,
+      "errored": 0,
+      "replayed": 0
+    },
+    "byEvent": {
+      "document:index-requested": {
+        "attempted": 1827,
+        "admitted": 1827,
+        "dropped": 0
+      },
+      "webhook:received": {
+        "attempted": 4617,
+        "admitted": 4617,
+        "dropped": 0
+      },
+      "billing:sync-requested": {
+        "attempted": 2789,
+        "admitted": 2789,
+        "dropped": 0
+      },
+      "approval:needed": {
+        "attempted": 933,
+        "admitted": 933,
+        "dropped": 0
+      }
+    },
+    "reportFiles": {
+      "text": "examples/reports/benchmarks/crash-recovery__mid-load__api-mixed__20260330-012653.txt",
+      "json": "examples/reports/benchmarks/crash-recovery__mid-load__api-mixed__20260330-012653.json"
+    }
+  },
+  {
+    "scenario": {
+      "id": "crash-recovery__mid-load__scraper-bounded",
+      "label": "Restart drill during scraper load",
+      "description": "Deliberate hard restart during active load to exercise restart/recovery behavior against a live SQLite store.",
+      "family": "restart-drill",
+      "kind": "recovery",
+      "visibility": "internal",
+      "tags": [
+        "restart",
+        "recovery",
+        "scraper"
+      ],
+      "phases": [
+        {
+          "label": "warm-up",
+          "eventsPerSec": 10,
+          "durationSec": 60
+        },
+        {
+          "label": "active-load",
+          "eventsPerSec": 20,
+          "durationSec": 180
+        },
+        {
+          "label": "post-restart",
+          "eventsPerSec": 16,
+          "durationSec": 120
+        },
+        {
+          "label": "cool-down",
+          "eventsPerSec": 0,
+          "durationSec": 60
+        }
+      ],
+      "notes": [
+        "The runner performs a deliberate hard restart against the same SQLite database.",
+        "This is a restart drill, not a SIGKILL chaos test.",
+        "Use it to validate that the queue continues after restart and that memory settles again."
+      ],
+      "concurrency": 40
+    },
+    "startedAt": "2026-03-29T15:26:53.301Z",
+    "finishedAt": "2026-03-29T15:33:53.588Z",
+    "machine": {
+      "hostname": "lothlorien",
+      "platform": "linux",
+      "arch": "x64",
+      "cpus": 16,
+      "totalMemoryBytes": 66888458240,
+      "nodeVersion": "v24.14.0"
+    },
+    "totals": {
+      "seedAttempts": 5799,
+      "seedAdmitted": 5729,
+      "seedDropped": 70,
+      "runsCompleted": 13593,
+      "runsErrored": 43,
+      "retries": 143,
+      "deadLetters": 8,
+      "effectReplays": 0,
+      "restarts": 1,
+      "sqliteErrors": 0,
+      "throughputAvg": 32
+    },
+    "durations": {
+      "count": 13636,
+      "sumMs": 3561286,
+      "minMs": 7,
+      "maxMs": 3112,
+      "avgMs": 261.16793781167496,
+      "p50Ms": 100,
+      "p95Ms": 2500,
+      "histogram": {
+        "le10ms": 188,
+        "le50ms": 4613,
+        "le100ms": 3328,
+        "le250ms": 521,
+        "le500ms": 2798,
+        "le1000ms": 1243,
+        "le2500ms": 941,
+        "le5000ms": 4,
+        "le10000ms": 0,
+        "gt10000ms": 0
+      }
+    },
+    "memory": {
+      "peakRssBytes": 615399424,
+      "finalRssBytes": 489930752,
+      "peakQueueDepth": 16,
+      "dbFileBytes": 13533184,
+      "walFileBytes": 4173592
+    },
+    "effects": {
+      "completed": 5218,
+      "errored": 0,
+      "replayed": 0
+    },
+    "byEvent": {
+      "billing:sync-requested": {
+        "attempted": 1352,
+        "admitted": 1352,
+        "dropped": 0
+      },
+      "document:index-requested": {
+        "attempted": 920,
+        "admitted": 920,
+        "dropped": 0
+      },
+      "webhook:received": {
+        "attempted": 2244,
+        "admitted": 2244,
+        "dropped": 0
+      },
+      "approval:needed": {
+        "attempted": 469,
+        "admitted": 469,
+        "dropped": 0
+      },
+      "page:scrape-requested": {
+        "attempted": 814,
+        "admitted": 744,
+        "dropped": 70
+      }
+    },
+    "reportFiles": {
+      "text": "examples/reports/benchmarks/crash-recovery__mid-load__scraper-bounded__20260330-013353.txt",
+      "json": "examples/reports/benchmarks/crash-recovery__mid-load__scraper-bounded__20260330-013353.json"
+    }
+  }
+]

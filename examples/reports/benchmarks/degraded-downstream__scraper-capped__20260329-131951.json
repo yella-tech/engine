@@ -1,0 +1,135 @@
+{
+  "scenario": {
+    "id": "degraded-downstream__scraper-capped",
+    "label": "Degraded downstream with capped scraper",
+    "description": "Injects slower calls and rate-limited downstream behavior to show retries, dead letters, and degraded throughput.",
+    "family": "degraded-downstream",
+    "kind": "benchmark",
+    "visibility": "internal",
+    "tags": [
+      "degradation",
+      "retries",
+      "scraper"
+    ],
+    "phases": [
+      {
+        "label": "healthy",
+        "eventsPerSec": 14,
+        "durationSec": 60
+      },
+      {
+        "label": "slow",
+        "eventsPerSec": 18,
+        "durationSec": 60
+      },
+      {
+        "label": "rate-limited",
+        "eventsPerSec": 18,
+        "durationSec": 60
+      },
+      {
+        "label": "recovering",
+        "eventsPerSec": 14,
+        "durationSec": 60
+      },
+      {
+        "label": "cool-down",
+        "eventsPerSec": 0,
+        "durationSec": 60
+      }
+    ],
+    "notes": [
+      "The workload deliberately changes downstream conditions by phase.",
+      "This scenario exists to show retry recovery versus terminal failure behavior.",
+      "Expensive browser tasks remain capped while downstream APIs degrade."
+    ],
+    "concurrency": 40
+  },
+  "startedAt": "2026-03-29T03:14:51.455Z",
+  "finishedAt": "2026-03-29T03:19:51.818Z",
+  "machine": {
+    "hostname": "lothlorien",
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 16,
+    "totalMemoryBytes": 66888458240,
+    "nodeVersion": "v24.14.0"
+  },
+  "totals": {
+    "seedAttempts": 3695,
+    "seedAdmitted": 3542,
+    "seedDropped": 153,
+    "runsCompleted": 8462,
+    "runsErrored": 20,
+    "retries": 134,
+    "deadLetters": 0,
+    "effectReplays": 0,
+    "restarts": 0,
+    "sqliteErrors": 0,
+    "throughputAvg": 28
+  },
+  "durations": {
+    "count": 8482,
+    "sumMs": 4560912,
+    "minMs": 7,
+    "maxMs": 8186,
+    "avgMs": 537.7165762791794,
+    "p50Ms": 250,
+    "p95Ms": 2500,
+    "histogram": {
+      "le10ms": 122,
+      "le50ms": 2567,
+      "le100ms": 1487,
+      "le250ms": 814,
+      "le500ms": 793,
+      "le1000ms": 1218,
+      "le2500ms": 1086,
+      "le5000ms": 344,
+      "le10000ms": 51,
+      "gt10000ms": 0
+    }
+  },
+  "memory": {
+    "peakRssBytes": 370704384,
+    "finalRssBytes": 245772288,
+    "peakQueueDepth": 34,
+    "dbFileBytes": 8474624,
+    "walFileBytes": 4181832
+  },
+  "effects": {
+    "completed": 3253,
+    "errored": 0,
+    "replayed": 0
+  },
+  "byEvent": {
+    "page:scrape-requested": {
+      "attempted": 562,
+      "admitted": 409,
+      "dropped": 153
+    },
+    "webhook:received": {
+      "attempted": 1433,
+      "admitted": 1433,
+      "dropped": 0
+    },
+    "document:index-requested": {
+      "attempted": 576,
+      "admitted": 576,
+      "dropped": 0
+    },
+    "billing:sync-requested": {
+      "attempted": 853,
+      "admitted": 853,
+      "dropped": 0
+    },
+    "approval:needed": {
+      "attempted": 271,
+      "admitted": 271,
+      "dropped": 0
+    }
+  },
+  "reportFiles": {
+    "text": "examples/reports/benchmarks/degraded-downstream__scraper-capped__20260329-131951.txt",
+    "json": "examples/reports/benchmarks/degraded-downstream__scraper-capped__20260329-131951.json"
+  }
+}

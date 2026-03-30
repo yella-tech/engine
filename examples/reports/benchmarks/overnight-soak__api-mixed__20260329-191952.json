@@ -1,0 +1,140 @@
+{
+  "scenario": {
+    "id": "overnight-soak__api-mixed",
+    "label": "Overnight soak (API mixed)",
+    "description": "Long-running stability test for memory, WAL growth, retries, and queue recovery.",
+    "family": "overnight-soak",
+    "kind": "soak",
+    "visibility": "internal",
+    "tags": [
+      "overnight",
+      "soak",
+      "api"
+    ],
+    "phases": [
+      {
+        "label": "warm-up",
+        "eventsPerSec": 12,
+        "durationSec": 900
+      },
+      {
+        "label": "steady-a",
+        "eventsPerSec": 18,
+        "durationSec": 5400
+      },
+      {
+        "label": "burst-a",
+        "eventsPerSec": 35,
+        "durationSec": 1800
+      },
+      {
+        "label": "steady-b",
+        "eventsPerSec": 18,
+        "durationSec": 5400
+      },
+      {
+        "label": "burst-b",
+        "eventsPerSec": 35,
+        "durationSec": 1800
+      },
+      {
+        "label": "steady-c",
+        "eventsPerSec": 18,
+        "durationSec": 5400
+      },
+      {
+        "label": "cool-down",
+        "eventsPerSec": 0,
+        "durationSec": 900
+      }
+    ],
+    "notes": [
+      "This is an internal trust test, not a site benchmark.",
+      "Run this on the same machine class you use in production.",
+      "The important signals are RSS stability, WAL/DB growth, retry counts, and whether the queue fully recovers after each burst."
+    ],
+    "concurrency": 50
+  },
+  "startedAt": "2026-03-29T03:19:51.835Z",
+  "finishedAt": "2026-03-29T09:19:52.272Z",
+  "machine": {
+    "hostname": "lothlorien",
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 16,
+    "totalMemoryBytes": 66888458240,
+    "nodeVersion": "v24.14.0"
+  },
+  "totals": {
+    "seedAttempts": 404393,
+    "seedAdmitted": 404393,
+    "seedDropped": 0,
+    "runsCompleted": 985742,
+    "runsErrored": 2606,
+    "retries": 8799,
+    "deadLetters": 4,
+    "effectReplays": 0,
+    "restarts": 0,
+    "sqliteErrors": 0,
+    "throughputAvg": 46
+  },
+  "durations": {
+    "count": 988348,
+    "sumMs": 213588308,
+    "minMs": 7,
+    "maxMs": 3560,
+    "avgMs": 216.10637953433405,
+    "p50Ms": 100,
+    "p95Ms": 1000,
+    "histogram": {
+      "le10ms": 15642,
+      "le50ms": 348935,
+      "le100ms": 230281,
+      "le250ms": 45559,
+      "le500ms": 229752,
+      "le1000ms": 92930,
+      "le2500ms": 25060,
+      "le5000ms": 189,
+      "le10000ms": 0,
+      "gt10000ms": 0
+    }
+  },
+  "memory": {
+    "peakRssBytes": 267190272,
+    "finalRssBytes": 267321344,
+    "peakQueueDepth": 28,
+    "dbFileBytes": 971485184,
+    "walFileBytes": 4198312
+  },
+  "effects": {
+    "completed": 365423,
+    "errored": 0,
+    "replayed": 0
+  },
+  "byEvent": {
+    "document:index-requested": {
+      "attempted": 73381,
+      "admitted": 73381,
+      "dropped": 0
+    },
+    "webhook:received": {
+      "attempted": 183772,
+      "admitted": 183772,
+      "dropped": 0
+    },
+    "billing:sync-requested": {
+      "attempted": 110635,
+      "admitted": 110635,
+      "dropped": 0
+    },
+    "approval:needed": {
+      "attempted": 36605,
+      "admitted": 36605,
+      "dropped": 0
+    }
+  },
+  "reportFiles": {
+    "text": "examples/reports/benchmarks/overnight-soak__api-mixed__20260329-191952.txt",
+    "json": "examples/reports/benchmarks/overnight-soak__api-mixed__20260329-191952.json"
+  }
+}

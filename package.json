@@ -38,6 +38,12 @@
     "example": "tsx examples/example.ts",
     "example:approval": "tsx examples/approval-flow.ts",
     "load-test": "tsx examples/load-test.ts",
+    "benchmark": "tsx examples/benchmarks/run.ts",
+    "benchmark:list": "tsx examples/benchmarks/run.ts list",
+    "benchmark:public": "tsx examples/benchmarks/run.ts public",
+    "benchmark:recovery": "tsx examples/benchmarks/run.ts recovery",
+    "benchmark:soak": "tsx examples/benchmarks/run.ts soak",
+    "benchmark:all": "tsx examples/benchmarks/run.ts all",
     "format": "prettier --write 'src/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.ts'"
   },

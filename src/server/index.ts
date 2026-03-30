@@ -55,7 +55,7 @@ function buildDashboardBundle(uiDir: string): { indexHtml: string; assets: Map<s
   let indexHtml = readFileOr(path.join(uiDir, 'index.html'), fallbackHtml)
   const assets = new Map<string, DashboardAsset>()
 
-  // brutalist.css lives in src/ui/ — resolve relative to package root
+  // brutalist.css lives in src/ui/: resolve relative to package root
   const pkgRoot = path.join(__dirname, '..', '..')
   const fallbackCssPath = path.join(pkgRoot, 'src', 'ui', 'brutalist.css')
   const fallbackCss = readFileOr(fallbackCssPath, '')

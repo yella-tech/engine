@@ -1,0 +1,95 @@
+
+Yella Engine Benchmark  [Restart drill during API mixed load]
+════════════════════════════════════════════════════════════════════════════════════════════════
+  Scenario:      crash-recovery__mid-load__api-mixed
+  Family:        restart-drill (recovery, internal)
+  Description:   Deliberate hard restart during active load to exercise restart/recovery behavior against a live SQLite store.
+  Fleet conc.:   50
+  Duration:      35s across 4 phases
+  Seed attempts: ~790
+  Machine:       16 CPU threads, 63790MB RAM, linux/x64
+  Scale:         0.05x duration
+  Retry policy:  2 retries
+  Notes:
+    - The runner performs a deliberate hard restart against the same SQLite database.
+    - This is a restart drill, not a SIGKILL chaos test.
+    - Use it to validate that the queue continues after restart and that memory settles again.
+
+  Phases:
+    warm-up        16 events/s × 10s
+    active-load    35 events/s × 10s
+    post-restart   28 events/s × 10s
+    cool-down       0 events/s × 5s
+════════════════════════════════════════════════════════════════════════════════════════════════
+
+     ts │ phase        │ queue                │    completed │   throughput │         p95 │      rss │     wal
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+     2s │ warm-up      │ q:     0 idle   7 run │ done:      59 │    29.1 run/s │ p95:  1000ms │ rss: 135MB │ wal:  4MB
+     4s │ warm-up      │ q:     0 idle   7 run │ done:     133 │    37.5 run/s │ p95:  1000ms │ rss: 135MB │ wal:  4MB
+  Restart drill: cycling engine at 6s
+     6s │ warm-up      │ q:     0 idle   7 run │ done:     209 │    38.4 run/s │ p95:  1000ms │ rss: 135MB │ wal:  0MB
+     8s │ warm-up      │ q:     0 idle   8 run │ done:     278 │    34.5 run/s │ p95:  1000ms │ rss: 136MB │ wal:  4MB
+    10s │ active-load  │ q:     0 idle   9 run │ done:     350 │      37 run/s │ p95:  1000ms │ rss: 138MB │ wal:  4MB
+    12s │ active-load  │ q:     1 idle  17 run │ done:     496 │      73 run/s │ p95:  1000ms │ rss: 141MB │ wal:  4MB
+    14s │ active-load  │ q:     0 idle  19 run │ done:     661 │      83 run/s │ p95:  1000ms │ rss: 141MB │ wal:  4MB
+    16s │ active-load  │ q:     0 idle  15 run │ done:     825 │      83 run/s │ p95:  1000ms │ rss: 141MB │ wal:  4MB
+    18s │ active-load  │ q:     0 idle  15 run │ done:     990 │    82.5 run/s │ p95:  1000ms │ rss: 141MB │ wal:  4MB
+    20s │ active-load  │ q:     0 idle  20 run │ done:   1,147 │    78.5 run/s │ p95:  1000ms │ rss: 142MB │ wal:  4MB
+    22s │ post-restart │ q:     0 idle  15 run │ done:   1,289 │    71.5 run/s │ p95:  1000ms │ rss: 142MB │ wal:  4MB
+    24s │ post-restart │ q:     0 idle  14 run │ done:   1,419 │    65.5 run/s │ p95:  1000ms │ rss: 142MB │ wal:  4MB
+    26s │ post-restart │ q:     0 idle  12 run │ done:   1,561 │    71.5 run/s │ p95:  1000ms │ rss: 142MB │ wal:  4MB
+    28s │ post-restart │ q:     2 idle  15 run │ done:   1,686 │    62.5 run/s │ p95:  1000ms │ rss: 142MB │ wal:  4MB
+    30s │ post-restart │ q:     1 idle  14 run │ done:   1,827 │    70.5 run/s │ p95:  1000ms │ rss: 142MB │ wal:  4MB
+    32s │ cool-down    │ q:     0 idle   0 run │ done:   1,855 │      14 run/s │ p95:  1000ms │ rss: 142MB │ wal:  4MB
+    34s │ cool-down    │ q:     0 idle   0 run │ done:   1,855 │       0 run/s │ p95:  1000ms │ rss: 142MB │ wal:  4MB
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Draining remaining queue...
+    35s │ draining     │ q:     0 idle   0 run │ done:   1,855 │       0 run/s │ p95:  1000ms │ rss: 142MB │ wal:  4MB
+
+════════════════════════════════════════════════════════════════════════════════════════════════
+Post-Mortem Report  [Restart drill during API mixed load]
+════════════════════════════════════════════════════════════════════════════════════════════════
+
+  Totals
+  ──────
+    Duration:        35s
+    Seed attempts:   772
+    Seed admitted:   772
+    Seed dropped:    0
+    Runs completed:  1,855
+    Runs errored:    10
+    Retries:         15
+    Dead letters:    0
+    Effect replays:  0
+    Restarts:        1
+    SQLite errors:   0
+    Throughput:      53 runs/s avg
+
+  Seed Admission By Event
+  ───────────────────────
+    approval:needed          attempted     69 admitted     69 dropped      0
+    billing:sync-requested   attempted    230 admitted    230 dropped      0
+    document:index-requested attempted    135 admitted    135 dropped      0
+    webhook:received         attempted    338 admitted    338 dropped      0
+
+  Run Duration
+  ────────────
+    avg:  209ms
+    p50:  100ms
+    p95:  1000ms
+    max:  2120ms
+
+  Memory and Storage
+  ──────────────────
+    Peak RSS:     142MB
+    Final RSS:    144MB
+    Peak queue:   20
+    DB file:      2MB
+    WAL file:     4MB
+
+  P95 Trend (10s buckets)
+  ───────────────────────
+       0s    1000ms  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+
+  Saved text report: examples/reports/benchmarks/crash-recovery__mid-load__api-mixed__20260329-101317.txt
+  Saved JSON summary: examples/reports/benchmarks/crash-recovery__mid-load__api-mixed__20260329-101317.json

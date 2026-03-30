@@ -1,0 +1,94 @@
+
+Yella Engine Benchmark  [API mixed workload (fleet concurrency 20)]
+════════════════════════════════════════════════════════════════════════════════════════════════
+  Scenario:      api-mixed__fleet-c20
+  Family:        api-mixed (benchmark, public)
+  Description:   Mixed webhook, billing, document, and approval automation with retries, outliers, and durable effects.
+  Fleet conc.:   20
+  Duration:      35s across 4 phases
+  Seed attempts: ~140
+  Machine:       16 CPU threads, 63790MB RAM, linux/x64
+  Scale:         0.05x duration
+  Retry policy:  2 retries
+  Notes:
+    - Global concurrency is the only limit in this scenario.
+    - Root events fan out into 2-3 stage chains with durable effects.
+    - This is the public benchmark family used for the site performance page.
+
+  Phases:
+    warm-up         2 events/s × 10s
+    steady          4 events/s × 10s
+    peak            8 events/s × 10s
+    cool-down       0 events/s × 5s
+════════════════════════════════════════════════════════════════════════════════════════════════
+
+     ts │ phase        │ queue                │    completed │   throughput │         p95 │      rss │     wal
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+     2s │ warm-up      │ q:     0 idle   0 run │ done:      11 │     5.4 run/s │ p95:   500ms │ rss: 104MB │ wal:  1MB
+     4s │ warm-up      │ q:     0 idle   0 run │ done:      19 │       4 run/s │ p95:   500ms │ rss: 104MB │ wal:  2MB
+     6s │ warm-up      │ q:     0 idle   1 run │ done:      29 │       5 run/s │ p95:   500ms │ rss: 106MB │ wal:  3MB
+     8s │ warm-up      │ q:     0 idle   1 run │ done:      39 │       5 run/s │ p95:  1000ms │ rss: 106MB │ wal:  3MB
+    10s │ warm-up      │ q:     0 idle   1 run │ done:      48 │     4.5 run/s │ p95:  1000ms │ rss: 106MB │ wal:  4MB
+    12s │ steady       │ q:     0 idle   3 run │ done:      65 │     8.5 run/s │ p95:  1000ms │ rss: 106MB │ wal:  4MB
+    14s │ steady       │ q:     0 idle   1 run │ done:      88 │    11.5 run/s │ p95:  1000ms │ rss: 106MB │ wal:  4MB
+    16s │ steady       │ q:     0 idle   1 run │ done:     105 │       9 run/s │ p95:  1000ms │ rss: 106MB │ wal:  4MB
+    18s │ steady       │ q:     0 idle   3 run │ done:     123 │       9 run/s │ p95:  1000ms │ rss: 106MB │ wal:  4MB
+    20s │ steady       │ q:     0 idle   2 run │ done:     145 │      11 run/s │ p95:  1000ms │ rss: 106MB │ wal:  4MB
+    22s │ peak         │ q:     0 idle   4 run │ done:     177 │      16 run/s │ p95:  1000ms │ rss: 106MB │ wal:  4MB
+    24s │ peak         │ q:     0 idle   5 run │ done:     213 │      18 run/s │ p95:  1000ms │ rss: 106MB │ wal:  4MB
+    26s │ peak         │ q:     0 idle   4 run │ done:     251 │      19 run/s │ p95:  1000ms │ rss: 106MB │ wal:  4MB
+    28s │ peak         │ q:     0 idle   6 run │ done:     287 │      18 run/s │ p95:  1000ms │ rss: 106MB │ wal:  4MB
+    30s │ peak         │ q:     0 idle   3 run │ done:     329 │      21 run/s │ p95:  1000ms │ rss: 106MB │ wal:  4MB
+    32s │ cool-down    │ q:     0 idle   0 run │ done:     339 │       5 run/s │ p95:  1000ms │ rss: 106MB │ wal:  4MB
+    34s │ cool-down    │ q:     0 idle   0 run │ done:     339 │       0 run/s │ p95:  1000ms │ rss: 106MB │ wal:  4MB
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Draining remaining queue...
+    35s │ draining     │ q:     0 idle   0 run │ done:     339 │       0 run/s │ p95:  1000ms │ rss: 106MB │ wal:  4MB
+
+════════════════════════════════════════════════════════════════════════════════════════════════
+Post-Mortem Report  [API mixed workload (fleet concurrency 20)]
+════════════════════════════════════════════════════════════════════════════════════════════════
+
+  Totals
+  ──────
+    Duration:        35s
+    Seed attempts:   140
+    Seed admitted:   140
+    Seed dropped:    0
+    Runs completed:  339
+    Runs errored:    1
+    Retries:         3
+    Dead letters:    0
+    Effect replays:  0
+    Restarts:        0
+    SQLite errors:   0
+    Throughput:      10 runs/s avg
+
+  Seed Admission By Event
+  ───────────────────────
+    approval:needed          attempted     11 admitted     11 dropped      0
+    billing:sync-requested   attempted     41 admitted     41 dropped      0
+    document:index-requested attempted     26 admitted     26 dropped      0
+    webhook:received         attempted     62 admitted     62 dropped      0
+
+  Run Duration
+  ────────────
+    avg:  221ms
+    p50:  100ms
+    p95:  1000ms
+    max:  2009ms
+
+  Memory and Storage
+  ──────────────────
+    Peak RSS:     106MB
+    Final RSS:    108MB
+    Peak queue:   6
+    DB file:      0MB
+    WAL file:     4MB
+
+  P95 Trend (10s buckets)
+  ───────────────────────
+       0s    1000ms  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+
+  Saved text report: examples/reports/benchmarks/api-mixed__fleet-c20__20260329-101157.txt
+  Saved JSON summary: examples/reports/benchmarks/api-mixed__fleet-c20__20260329-101157.json

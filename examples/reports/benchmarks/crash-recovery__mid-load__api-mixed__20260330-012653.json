@@ -1,0 +1,125 @@
+{
+  "scenario": {
+    "id": "crash-recovery__mid-load__api-mixed",
+    "label": "Restart drill during API mixed load",
+    "description": "Deliberate hard restart during active load to exercise restart/recovery behavior against a live SQLite store.",
+    "family": "restart-drill",
+    "kind": "recovery",
+    "visibility": "internal",
+    "tags": [
+      "restart",
+      "recovery",
+      "api"
+    ],
+    "phases": [
+      {
+        "label": "warm-up",
+        "eventsPerSec": 16,
+        "durationSec": 60
+      },
+      {
+        "label": "active-load",
+        "eventsPerSec": 35,
+        "durationSec": 180
+      },
+      {
+        "label": "post-restart",
+        "eventsPerSec": 28,
+        "durationSec": 120
+      },
+      {
+        "label": "cool-down",
+        "eventsPerSec": 0,
+        "durationSec": 60
+      }
+    ],
+    "notes": [
+      "The runner performs a deliberate hard restart against the same SQLite database.",
+      "This is a restart drill, not a SIGKILL chaos test.",
+      "Use it to validate that the queue continues after restart and that memory settles again."
+    ],
+    "concurrency": 50
+  },
+  "startedAt": "2026-03-29T15:19:53.014Z",
+  "finishedAt": "2026-03-29T15:26:53.249Z",
+  "machine": {
+    "hostname": "lothlorien",
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 16,
+    "totalMemoryBytes": 66888458240,
+    "nodeVersion": "v24.14.0"
+  },
+  "totals": {
+    "seedAttempts": 10166,
+    "seedAdmitted": 10166,
+    "seedDropped": 0,
+    "runsCompleted": 24773,
+    "runsErrored": 69,
+    "retries": 229,
+    "deadLetters": 5,
+    "effectReplays": 0,
+    "restarts": 1,
+    "sqliteErrors": 0,
+    "throughputAvg": 59
+  },
+  "durations": {
+    "count": 24842,
+    "sumMs": 5311688,
+    "minMs": 7,
+    "maxMs": 3314,
+    "avgMs": 213.81885516464052,
+    "p50Ms": 100,
+    "p95Ms": 1000,
+    "histogram": {
+      "le10ms": 449,
+      "le50ms": 8860,
+      "le100ms": 5815,
+      "le250ms": 1008,
+      "le500ms": 5828,
+      "le1000ms": 2264,
+      "le2500ms": 612,
+      "le5000ms": 6,
+      "le10000ms": 0,
+      "gt10000ms": 0
+    }
+  },
+  "memory": {
+    "peakRssBytes": 340230144,
+    "finalRssBytes": 288546816,
+    "peakQueueDepth": 24,
+    "dbFileBytes": 24449024,
+    "walFileBytes": 4173592
+  },
+  "effects": {
+    "completed": 9169,
+    "errored": 0,
+    "replayed": 0
+  },
+  "byEvent": {
+    "document:index-requested": {
+      "attempted": 1827,
+      "admitted": 1827,
+      "dropped": 0
+    },
+    "webhook:received": {
+      "attempted": 4617,
+      "admitted": 4617,
+      "dropped": 0
+    },
+    "billing:sync-requested": {
+      "attempted": 2789,
+      "admitted": 2789,
+      "dropped": 0
+    },
+    "approval:needed": {
+      "attempted": 933,
+      "admitted": 933,
+      "dropped": 0
+    }
+  },
+  "reportFiles": {
+    "text": "examples/reports/benchmarks/crash-recovery__mid-load__api-mixed__20260330-012653.txt",
+    "json": "examples/reports/benchmarks/crash-recovery__mid-load__api-mixed__20260330-012653.json"
+  }
+}

@@ -1,0 +1,289 @@
+
+Yella Engine Benchmark  [Restart drill during API mixed load]
+════════════════════════════════════════════════════════════════════════════════════════════════
+  Scenario:      crash-recovery__mid-load__api-mixed
+  Family:        restart-drill (recovery, internal)
+  Description:   Deliberate hard restart during active load to exercise restart/recovery behavior against a live SQLite store.
+  Fleet conc.:   50
+  Duration:      420s across 4 phases
+  Seed attempts: ~10,620
+  Machine:       16 CPU threads, 63790MB RAM, linux/x64
+  Retry policy:  2 retries
+  Notes:
+    - The runner performs a deliberate hard restart against the same SQLite database.
+    - This is a restart drill, not a SIGKILL chaos test.
+    - Use it to validate that the queue continues after restart and that memory settles again.
+
+  Phases:
+    warm-up        16 events/s × 60s
+    active-load    35 events/s × 180s
+    post-restart   28 events/s × 120s
+    cool-down       0 events/s × 60s
+════════════════════════════════════════════════════════════════════════════════════════════════
+
+     ts │ phase        │ queue                │    completed │   throughput │         p95 │      rss │     wal
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+     2s │ warm-up      │ q:     1 idle   9 run │ done:      65 │    32.5 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+     4s │ warm-up      │ q:     0 idle  10 run │ done:     134 │    34.5 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+     6s │ warm-up      │ q:     0 idle   8 run │ done:     210 │      38 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+     8s │ warm-up      │ q:     0 idle   9 run │ done:     287 │    38.5 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    10s │ warm-up      │ q:     0 idle   8 run │ done:     359 │      36 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    12s │ warm-up      │ q:     1 idle   7 run │ done:     438 │    39.5 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    14s │ warm-up      │ q:     0 idle   6 run │ done:     520 │      41 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    16s │ warm-up      │ q:     0 idle   9 run │ done:     592 │      36 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    18s │ warm-up      │ q:     0 idle   8 run │ done:     669 │    38.5 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    20s │ warm-up      │ q:     0 idle   6 run │ done:     745 │      38 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    22s │ warm-up      │ q:     0 idle   6 run │ done:     824 │    39.5 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    24s │ warm-up      │ q:     0 idle   7 run │ done:     899 │    37.5 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    26s │ warm-up      │ q:     0 idle   9 run │ done:     971 │      36 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    28s │ warm-up      │ q:     0 idle   6 run │ done:   1,052 │    40.5 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    30s │ warm-up      │ q:     0 idle  11 run │ done:   1,121 │      35 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    32s │ warm-up      │ q:     0 idle   7 run │ done:   1,196 │      38 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    34s │ warm-up      │ q:     1 idle   7 run │ done:   1,270 │      37 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    36s │ warm-up      │ q:     0 idle  11 run │ done:   1,338 │      34 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    38s │ warm-up      │ q:     0 idle   8 run │ done:   1,424 │    43.5 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    40s │ warm-up      │ q:     1 idle   8 run │ done:   1,497 │    37.5 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    42s │ warm-up      │ q:     0 idle   8 run │ done:   1,570 │    36.5 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    44s │ warm-up      │ q:     0 idle   9 run │ done:   1,646 │      38 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    46s │ warm-up      │ q:     0 idle   9 run │ done:   1,725 │    39.5 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    48s │ warm-up      │ q:     1 idle  10 run │ done:   1,799 │      37 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    50s │ warm-up      │ q:     0 idle   8 run │ done:   1,877 │    39.5 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    52s │ warm-up      │ q:     0 idle   7 run │ done:   1,959 │      41 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    54s │ warm-up      │ q:     0 idle   8 run │ done:   2,033 │      37 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    56s │ warm-up      │ q:     0 idle   9 run │ done:   2,108 │    37.5 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    58s │ warm-up      │ q:     0 idle  12 run │ done:   2,177 │      35 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    60s │ warm-up      │ q:     0 idle  10 run │ done:   2,254 │    38.5 run/s │ p95:  1000ms │ rss: 324MB │ wal:  4MB
+    62s │ active-load  │ q:     0 idle  16 run │ done:   2,404 │    75.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+    64s │ active-load  │ q:     0 idle  19 run │ done:   2,552 │    74.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+    66s │ active-load  │ q:     1 idle  17 run │ done:   2,721 │    84.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+    68s │ active-load  │ q:     0 idle  17 run │ done:   2,876 │      78 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+    70s │ active-load  │ q:     0 idle  18 run │ done:   3,041 │    82.2 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+    72s │ active-load  │ q:     1 idle  15 run │ done:   3,208 │      84 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+    74s │ active-load  │ q:     0 idle  17 run │ done:   3,369 │      81 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+    76s │ active-load  │ q:     0 idle  20 run │ done:   3,530 │    80.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+    78s │ active-load  │ q:     1 idle  20 run │ done:   3,688 │      79 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+    80s │ active-load  │ q:     0 idle  22 run │ done:   3,854 │      83 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+    82s │ active-load  │ q:     0 idle  18 run │ done:   4,028 │      87 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+    84s │ active-load  │ q:     0 idle  23 run │ done:   4,192 │      82 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+    86s │ active-load  │ q:     0 idle  19 run │ done:   4,359 │    83.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+    88s │ active-load  │ q:     1 idle  18 run │ done:   4,519 │      80 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+    90s │ active-load  │ q:     0 idle  24 run │ done:   4,669 │      75 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+    92s │ active-load  │ q:     0 idle  21 run │ done:   4,838 │    84.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+    94s │ active-load  │ q:     0 idle  18 run │ done:   5,002 │    82.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+    96s │ active-load  │ q:     0 idle  17 run │ done:   5,169 │    83.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+    98s │ active-load  │ q:     0 idle  18 run │ done:   5,330 │    80.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   100s │ active-load  │ q:     0 idle  14 run │ done:   5,500 │      85 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   102s │ active-load  │ q:     0 idle  16 run │ done:   5,658 │    79.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   104s │ active-load  │ q:     1 idle  15 run │ done:   5,822 │      82 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   106s │ active-load  │ q:     0 idle  16 run │ done:   5,986 │      82 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   108s │ active-load  │ q:     0 idle  13 run │ done:   6,147 │      81 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   110s │ active-load  │ q:     0 idle  19 run │ done:   6,305 │      79 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   112s │ active-load  │ q:     1 idle  15 run │ done:   6,474 │      85 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   114s │ active-load  │ q:     1 idle  20 run │ done:   6,625 │    75.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   116s │ active-load  │ q:     1 idle  18 run │ done:   6,791 │    83.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   118s │ active-load  │ q:     0 idle  24 run │ done:   6,938 │      74 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+  Restart drill: cycling engine at 120s
+   120s │ active-load  │ q:     1 idle  19 run │ done:   7,105 │    83.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  0MB
+   122s │ active-load  │ q:     2 idle  16 run │ done:   7,267 │      82 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   124s │ active-load  │ q:     0 idle  14 run │ done:   7,433 │      85 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   126s │ active-load  │ q:     0 idle  16 run │ done:   7,598 │    82.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   128s │ active-load  │ q:     0 idle  16 run │ done:   7,761 │    82.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   130s │ active-load  │ q:     0 idle  16 run │ done:   7,921 │      80 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   132s │ active-load  │ q:     1 idle  21 run │ done:   8,071 │      75 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   134s │ active-load  │ q:     0 idle  20 run │ done:   8,238 │    83.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   136s │ active-load  │ q:     0 idle  18 run │ done:   8,406 │      84 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   138s │ active-load  │ q:     1 idle  17 run │ done:   8,570 │      82 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   140s │ active-load  │ q:     0 idle  15 run │ done:   8,732 │    80.9 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   142s │ active-load  │ q:     0 idle  17 run │ done:   8,891 │      80 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   144s │ active-load  │ q:     2 idle  17 run │ done:   9,050 │    79.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   146s │ active-load  │ q:     0 idle  16 run │ done:   9,216 │    83.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   148s │ active-load  │ q:     0 idle  16 run │ done:   9,380 │    82.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   150s │ active-load  │ q:     0 idle  18 run │ done:   9,542 │    81.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   152s │ active-load  │ q:     0 idle  17 run │ done:   9,700 │      79 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   154s │ active-load  │ q:     0 idle  15 run │ done:   9,866 │    83.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   156s │ active-load  │ q:     1 idle  19 run │ done:  10,023 │    79.4 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   158s │ active-load  │ q:     1 idle  18 run │ done:  10,185 │    81.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   160s │ active-load  │ q:     1 idle  20 run │ done:  10,352 │    83.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   162s │ active-load  │ q:     1 idle  17 run │ done:  10,517 │    82.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   164s │ active-load  │ q:     1 idle  19 run │ done:  10,677 │      80 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   166s │ active-load  │ q:     0 idle  22 run │ done:  10,838 │    80.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   168s │ active-load  │ q:     0 idle  18 run │ done:  11,009 │    85.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   170s │ active-load  │ q:     0 idle  14 run │ done:  11,172 │    81.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   172s │ active-load  │ q:     0 idle  22 run │ done:  11,321 │      75 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   174s │ active-load  │ q:     0 idle  17 run │ done:  11,494 │    86.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   176s │ active-load  │ q:     0 idle  17 run │ done:  11,656 │      81 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   178s │ active-load  │ q:     0 idle  16 run │ done:  11,818 │      81 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   180s │ active-load  │ q:     0 idle  16 run │ done:  11,978 │      81 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   182s │ active-load  │ q:     0 idle  18 run │ done:  12,148 │      85 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   184s │ active-load  │ q:     0 idle  21 run │ done:  12,312 │      82 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   186s │ active-load  │ q:     0 idle  22 run │ done:  12,467 │    77.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   188s │ active-load  │ q:     0 idle  16 run │ done:  12,630 │    81.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   190s │ active-load  │ q:     0 idle  20 run │ done:  12,785 │      78 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   192s │ active-load  │ q:     0 idle  20 run │ done:  12,950 │    82.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   194s │ active-load  │ q:     0 idle  22 run │ done:  13,104 │    77.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   196s │ active-load  │ q:     1 idle  16 run │ done:  13,280 │      88 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   198s │ active-load  │ q:     0 idle  20 run │ done:  13,429 │      75 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   200s │ active-load  │ q:     1 idle  16 run │ done:  13,598 │    84.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   202s │ active-load  │ q:     0 idle  16 run │ done:  13,769 │    85.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   204s │ active-load  │ q:     1 idle  16 run │ done:  13,927 │      79 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   206s │ active-load  │ q:     0 idle  18 run │ done:  14,087 │      80 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   208s │ active-load  │ q:     1 idle  19 run │ done:  14,250 │      82 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   210s │ active-load  │ q:     0 idle  24 run │ done:  14,407 │    78.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   212s │ active-load  │ q:     0 idle  18 run │ done:  14,587 │    90.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   214s │ active-load  │ q:     0 idle  22 run │ done:  14,744 │      79 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   216s │ active-load  │ q:     0 idle  18 run │ done:  14,914 │    85.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   218s │ active-load  │ q:     0 idle  21 run │ done:  15,079 │    82.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   220s │ active-load  │ q:     0 idle  14 run │ done:  15,259 │    90.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   222s │ active-load  │ q:     0 idle  21 run │ done:  15,415 │    78.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   224s │ active-load  │ q:     0 idle  19 run │ done:  15,578 │    81.6 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   226s │ active-load  │ q:     2 idle  18 run │ done:  15,740 │      81 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   228s │ active-load  │ q:     0 idle  17 run │ done:  15,903 │    81.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   230s │ active-load  │ q:     0 idle  19 run │ done:  16,061 │      79 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   232s │ active-load  │ q:     0 idle  14 run │ done:  16,226 │    82.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   234s │ active-load  │ q:     2 idle  18 run │ done:  16,375 │    74.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   236s │ active-load  │ q:     0 idle  16 run │ done:  16,543 │    84.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   238s │ active-load  │ q:     0 idle  16 run │ done:  16,698 │      78 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   240s │ active-load  │ q:     0 idle  21 run │ done:  16,853 │    77.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   242s │ post-restart │ q:     1 idle  14 run │ done:  16,998 │    72.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   244s │ post-restart │ q:     1 idle  12 run │ done:  17,127 │    64.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   246s │ post-restart │ q:     0 idle  14 run │ done:  17,257 │      65 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   248s │ post-restart │ q:     0 idle  11 run │ done:  17,393 │      68 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   250s │ post-restart │ q:     0 idle  15 run │ done:  17,520 │      64 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   252s │ post-restart │ q:     0 idle  16 run │ done:  17,644 │      62 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   254s │ post-restart │ q:     1 idle  13 run │ done:  17,777 │      67 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   256s │ post-restart │ q:     0 idle  15 run │ done:  17,910 │    66.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   258s │ post-restart │ q:     0 idle  17 run │ done:  18,031 │    60.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   260s │ post-restart │ q:     0 idle  13 run │ done:  18,168 │      69 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   262s │ post-restart │ q:     0 idle  12 run │ done:  18,301 │    66.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   264s │ post-restart │ q:     0 idle  17 run │ done:  18,423 │      61 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   266s │ post-restart │ q:     0 idle  14 run │ done:  18,565 │      71 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   268s │ post-restart │ q:     0 idle  14 run │ done:  18,691 │      63 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   270s │ post-restart │ q:     0 idle  16 run │ done:  18,819 │      64 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   272s │ post-restart │ q:     0 idle  15 run │ done:  18,946 │    63.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   274s │ post-restart │ q:     2 idle  14 run │ done:  19,071 │    62.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   276s │ post-restart │ q:     0 idle  18 run │ done:  19,197 │      64 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   278s │ post-restart │ q:     0 idle  16 run │ done:  19,332 │      68 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   280s │ post-restart │ q:     0 idle  17 run │ done:  19,459 │    63.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   282s │ post-restart │ q:     0 idle  14 run │ done:  19,602 │    71.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   284s │ post-restart │ q:     0 idle  23 run │ done:  19,724 │    60.9 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   286s │ post-restart │ q:     0 idle  16 run │ done:  19,866 │    71.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   288s │ post-restart │ q:     0 idle  17 run │ done:  19,993 │    63.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   290s │ post-restart │ q:     0 idle  17 run │ done:  20,131 │      69 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   292s │ post-restart │ q:     1 idle  17 run │ done:  20,260 │    64.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   294s │ post-restart │ q:     0 idle  13 run │ done:  20,397 │    68.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   296s │ post-restart │ q:     0 idle  15 run │ done:  20,525 │    64.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   298s │ post-restart │ q:     0 idle  14 run │ done:  20,660 │      68 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   300s │ post-restart │ q:     1 idle  16 run │ done:  20,782 │    60.6 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   302s │ post-restart │ q:     0 idle  14 run │ done:  20,914 │    66.2 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   304s │ post-restart │ q:     1 idle  13 run │ done:  21,045 │    65.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   306s │ post-restart │ q:     0 idle  14 run │ done:  21,180 │    67.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   308s │ post-restart │ q:     0 idle  16 run │ done:  21,313 │    66.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   310s │ post-restart │ q:     0 idle  14 run │ done:  21,446 │    66.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   312s │ post-restart │ q:     0 idle  13 run │ done:  21,583 │      69 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   314s │ post-restart │ q:     0 idle  12 run │ done:  21,718 │    67.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   316s │ post-restart │ q:     1 idle  14 run │ done:  21,848 │      65 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   318s │ post-restart │ q:     0 idle  13 run │ done:  21,990 │      71 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   320s │ post-restart │ q:     0 idle  16 run │ done:  22,110 │      60 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   322s │ post-restart │ q:     0 idle  17 run │ done:  22,244 │      67 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   324s │ post-restart │ q:     0 idle  13 run │ done:  22,382 │      69 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   326s │ post-restart │ q:     0 idle  15 run │ done:  22,510 │      64 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   328s │ post-restart │ q:     0 idle  13 run │ done:  22,645 │    68.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   330s │ post-restart │ q:     0 idle  12 run │ done:  22,772 │      64 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   332s │ post-restart │ q:     0 idle  15 run │ done:  22,901 │    64.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   334s │ post-restart │ q:     0 idle  12 run │ done:  23,040 │    69.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   336s │ post-restart │ q:     2 idle  10 run │ done:  23,170 │      65 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   338s │ post-restart │ q:     0 idle  15 run │ done:  23,293 │    61.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   340s │ post-restart │ q:     0 idle  14 run │ done:  23,427 │      68 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   342s │ post-restart │ q:     0 idle  13 run │ done:  23,565 │      69 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   344s │ post-restart │ q:     0 idle  15 run │ done:  23,696 │    65.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   346s │ post-restart │ q:     0 idle  16 run │ done:  23,826 │      65 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   348s │ post-restart │ q:     0 idle  14 run │ done:  23,960 │    67.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   350s │ post-restart │ q:     0 idle  18 run │ done:  24,080 │    60.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   352s │ post-restart │ q:     0 idle  15 run │ done:  24,220 │    70.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   354s │ post-restart │ q:     0 idle  12 run │ done:  24,362 │    70.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   356s │ post-restart │ q:     0 idle  13 run │ done:  24,490 │      64 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   358s │ post-restart │ q:     0 idle  16 run │ done:  24,616 │    62.9 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   360s │ cool-down    │ q:     0 idle  14 run │ done:  24,746 │      65 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   362s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │    13.5 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   364s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   366s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   368s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   370s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   372s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   374s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   376s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   378s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   380s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   382s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   384s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   386s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   388s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   390s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   392s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   394s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   396s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   398s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   400s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   402s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   404s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   406s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   408s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   410s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   412s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   414s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   416s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   418s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+   420s │ cool-down    │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Draining remaining queue...
+   420s │ draining     │ q:     0 idle   0 run │ done:  24,773 │       0 run/s │ p95:  1000ms │ rss: 275MB │ wal:  4MB
+
+════════════════════════════════════════════════════════════════════════════════════════════════
+Post-Mortem Report  [Restart drill during API mixed load]
+════════════════════════════════════════════════════════════════════════════════════════════════
+
+  Totals
+  ──────
+    Duration:        420s
+    Seed attempts:   10,166
+    Seed admitted:   10,166
+    Seed dropped:    0
+    Runs completed:  24,773
+    Runs errored:    69
+    Retries:         229
+    Dead letters:    5
+    Effect replays:  0
+    Restarts:        1
+    SQLite errors:   0
+    Throughput:      59 runs/s avg
+
+  Seed Admission By Event
+  ───────────────────────
+    approval:needed          attempted    933 admitted    933 dropped      0
+    billing:sync-requested   attempted  2,789 admitted  2,789 dropped      0
+    document:index-requested attempted  1,827 admitted  1,827 dropped      0
+    webhook:received         attempted  4,617 admitted  4,617 dropped      0
+
+  Run Duration
+  ────────────
+    avg:  214ms
+    p50:  100ms
+    p95:  1000ms
+    max:  3314ms
+
+  Memory and Storage
+  ──────────────────
+    Peak RSS:     324MB
+    Final RSS:    275MB
+    Peak queue:   24
+    DB file:      23MB
+    WAL file:     4MB
+
+  P95 Trend (10s buckets)
+  ───────────────────────
+       0s    1000ms  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+      17s    1000ms  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+     317s    1000ms  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+
+  Saved text report: examples/reports/benchmarks/crash-recovery__mid-load__api-mixed__20260330-012653.txt
+  Saved JSON summary: examples/reports/benchmarks/crash-recovery__mid-load__api-mixed__20260330-012653.json

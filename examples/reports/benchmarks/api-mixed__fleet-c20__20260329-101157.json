@@ -1,0 +1,126 @@
+{
+  "scenario": {
+    "id": "api-mixed__fleet-c20",
+    "label": "API mixed workload (fleet concurrency 20)",
+    "description": "Mixed webhook, billing, document, and approval automation with retries, outliers, and durable effects.",
+    "family": "api-mixed",
+    "kind": "benchmark",
+    "visibility": "public",
+    "tags": [
+      "sqlite",
+      "wal",
+      "retries",
+      "concurrency-sweep"
+    ],
+    "phases": [
+      {
+        "label": "warm-up",
+        "eventsPerSec": 2,
+        "durationSec": 10
+      },
+      {
+        "label": "steady",
+        "eventsPerSec": 4,
+        "durationSec": 10
+      },
+      {
+        "label": "peak",
+        "eventsPerSec": 8,
+        "durationSec": 10
+      },
+      {
+        "label": "cool-down",
+        "eventsPerSec": 0,
+        "durationSec": 5
+      }
+    ],
+    "notes": [
+      "Global concurrency is the only limit in this scenario.",
+      "Root events fan out into 2-3 stage chains with durable effects.",
+      "This is the public benchmark family used for the site performance page."
+    ],
+    "concurrency": 20
+  },
+  "startedAt": "2026-03-29T00:11:22.145Z",
+  "finishedAt": "2026-03-29T00:11:57.414Z",
+  "machine": {
+    "hostname": "lothlorien",
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 16,
+    "totalMemoryBytes": 66888458240,
+    "nodeVersion": "v24.14.0"
+  },
+  "totals": {
+    "seedAttempts": 140,
+    "seedAdmitted": 140,
+    "seedDropped": 0,
+    "runsCompleted": 339,
+    "runsErrored": 1,
+    "retries": 3,
+    "deadLetters": 0,
+    "effectReplays": 0,
+    "restarts": 0,
+    "sqliteErrors": 0,
+    "throughputAvg": 10
+  },
+  "durations": {
+    "count": 340,
+    "sumMs": 75157,
+    "minMs": 8,
+    "maxMs": 2009,
+    "avgMs": 221.05,
+    "p50Ms": 100,
+    "p95Ms": 1000,
+    "histogram": {
+      "le10ms": 7,
+      "le50ms": 108,
+      "le100ms": 84,
+      "le250ms": 17,
+      "le500ms": 92,
+      "le1000ms": 22,
+      "le2500ms": 10,
+      "le5000ms": 0,
+      "le10000ms": 0,
+      "gt10000ms": 0
+    }
+  },
+  "memory": {
+    "peakRssBytes": 111423488,
+    "finalRssBytes": 113950720,
+    "peakQueueDepth": 6,
+    "dbFileBytes": 401408,
+    "walFileBytes": 4148872
+  },
+  "effects": {
+    "completed": 128,
+    "errored": 0,
+    "replayed": 0
+  },
+  "byEvent": {
+    "webhook:received": {
+      "attempted": 62,
+      "admitted": 62,
+      "dropped": 0
+    },
+    "billing:sync-requested": {
+      "attempted": 41,
+      "admitted": 41,
+      "dropped": 0
+    },
+    "document:index-requested": {
+      "attempted": 26,
+      "admitted": 26,
+      "dropped": 0
+    },
+    "approval:needed": {
+      "attempted": 11,
+      "admitted": 11,
+      "dropped": 0
+    }
+  },
+  "reportFiles": {
+    "text": "examples/reports/benchmarks/api-mixed__fleet-c20__20260329-101157.txt",
+    "json": "examples/reports/benchmarks/api-mixed__fleet-c20__20260329-101157.json"
+  }
+}

@@ -1,0 +1,129 @@
+{
+  "scenario": {
+    "id": "burst-recovery__fleet-c50",
+    "label": "Burst recovery (fleet concurrency 50)",
+    "description": "Steady load, sharp burst, then recovery to show queue build-up and drain behavior.",
+    "family": "burst-recovery",
+    "kind": "benchmark",
+    "visibility": "internal",
+    "tags": [
+      "burst",
+      "recovery",
+      "api"
+    ],
+    "phases": [
+      {
+        "label": "steady",
+        "eventsPerSec": 20,
+        "durationSec": 60
+      },
+      {
+        "label": "surge",
+        "eventsPerSec": 55,
+        "durationSec": 60
+      },
+      {
+        "label": "spike",
+        "eventsPerSec": 90,
+        "durationSec": 60
+      },
+      {
+        "label": "recovery",
+        "eventsPerSec": 15,
+        "durationSec": 60
+      },
+      {
+        "label": "cool-down",
+        "eventsPerSec": 0,
+        "durationSec": 60
+      }
+    ],
+    "notes": [
+      "The queue should grow during the surge and spike phases.",
+      "The important signal is whether the system drains and stabilizes when the rate falls."
+    ],
+    "concurrency": 50
+  },
+  "startedAt": "2026-03-29T02:59:50.580Z",
+  "finishedAt": "2026-03-29T03:04:50.854Z",
+  "machine": {
+    "hostname": "lothlorien",
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 16,
+    "totalMemoryBytes": 66888458240,
+    "nodeVersion": "v24.14.0"
+  },
+  "totals": {
+    "seedAttempts": 9697,
+    "seedAdmitted": 9697,
+    "seedDropped": 0,
+    "runsCompleted": 23651,
+    "runsErrored": 59,
+    "retries": 230,
+    "deadLetters": 0,
+    "effectReplays": 0,
+    "restarts": 0,
+    "sqliteErrors": 0,
+    "throughputAvg": 79
+  },
+  "durations": {
+    "count": 23710,
+    "sumMs": 5069463,
+    "minMs": 7,
+    "maxMs": 3251,
+    "avgMs": 213.8111767186841,
+    "p50Ms": 100,
+    "p95Ms": 1000,
+    "histogram": {
+      "le10ms": 370,
+      "le50ms": 8350,
+      "le100ms": 5709,
+      "le250ms": 980,
+      "le500ms": 5599,
+      "le1000ms": 2094,
+      "le2500ms": 602,
+      "le5000ms": 6,
+      "le10000ms": 0,
+      "gt10000ms": 0
+    }
+  },
+  "memory": {
+    "peakRssBytes": 185020416,
+    "finalRssBytes": 129363968,
+    "peakQueueDepth": 47,
+    "dbFileBytes": 23408640,
+    "walFileBytes": 4190072
+  },
+  "effects": {
+    "completed": 8759,
+    "errored": 0,
+    "replayed": 0
+  },
+  "byEvent": {
+    "document:index-requested": {
+      "attempted": 1765,
+      "admitted": 1765,
+      "dropped": 0
+    },
+    "webhook:received": {
+      "attempted": 4405,
+      "admitted": 4405,
+      "dropped": 0
+    },
+    "billing:sync-requested": {
+      "attempted": 2641,
+      "admitted": 2641,
+      "dropped": 0
+    },
+    "approval:needed": {
+      "attempted": 886,
+      "admitted": 886,
+      "dropped": 0
+    }
+  },
+  "reportFiles": {
+    "text": "examples/reports/benchmarks/burst-recovery__fleet-c50__20260329-130450.txt",
+    "json": "examples/reports/benchmarks/burst-recovery__fleet-c50__20260329-130450.json"
+  }
+}

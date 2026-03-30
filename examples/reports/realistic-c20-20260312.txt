@@ -267,7 +267,7 @@ Yella Engine Load Test  [Realistic (API call simulation)]
    476s │ draining     │ q:  8048 idle  20 run │ done:  21,195 │    39.5 run/s │ p95:  2500ms │ rss: 184MB │ sq: 0
    478s │ draining     │ q:  8062 idle  20 run │ done:  21,268 │    36.5 run/s │ p95:  2500ms │ rss: 184MB │ sq: 0
    480s │ draining     │ q:  8070 idle  20 run │ done:  21,344 │      38 run/s │ p95:  2500ms │ rss: 184MB │ sq: 0
-  Drain timed out — some runs still pending
+  Drain timed out: some runs still pending
    480s │ done         │ q:  8073 idle  20 run │ done:  21,347 │    25.9 run/s │ p95:  2500ms │ rss: 184MB │ sq: 0
 
 ════════════════════════════════════════════════════════════════════════════════

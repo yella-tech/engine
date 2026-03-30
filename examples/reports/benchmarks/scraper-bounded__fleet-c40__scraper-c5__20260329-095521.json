@@ -1,0 +1,103 @@
+{
+  "scenario": {
+    "id": "scraper-bounded__fleet-c40__scraper-c5",
+    "label": "Bounded scraper workload (fleet 40, scraper 5)",
+    "description": "Mixed automation where a memory-heavy browser task is capped independently from the rest of the engine.",
+    "family": "scraper-bounded",
+    "tags": [
+      "memory",
+      "scraper",
+      "bounded-concurrency"
+    ],
+    "phases": [
+      {
+        "label": "warm-up",
+        "eventsPerSec": 6,
+        "durationSec": 15
+      },
+      {
+        "label": "steady",
+        "eventsPerSec": 18,
+        "durationSec": 25
+      },
+      {
+        "label": "burst",
+        "eventsPerSec": 36,
+        "durationSec": 25
+      },
+      {
+        "label": "cool-down",
+        "eventsPerSec": 0,
+        "durationSec": 15
+      }
+    ],
+    "notes": [
+      "The browser-like scraper allocates about 24MB per active run.",
+      "The scraper process uses its own concurrency cap of 5, independent from fleet concurrency.",
+      "This demonstrates how to keep memory-heavy handlers from dominating a small box."
+    ],
+    "concurrency": 40
+  },
+  "startedAt": "2026-03-28T23:54:01.407Z",
+  "finishedAt": "2026-03-28T23:55:21.499Z",
+  "totals": {
+    "seedAttempts": 1398,
+    "seedAdmitted": 1188,
+    "seedDropped": 210,
+    "runsCompleted": 2374,
+    "runsErrored": 1,
+    "retries": 17,
+    "deadLetters": 1,
+    "effectReplays": 0,
+    "sqliteErrors": 0,
+    "throughputAvg": 30
+  },
+  "durations": {
+    "count": 2375,
+    "sumMs": 626445,
+    "minMs": 25,
+    "maxMs": 4309,
+    "avgMs": 263.7663157894737,
+    "p50Ms": 250,
+    "p95Ms": 2500,
+    "histogram": {
+      "le10ms": 0,
+      "le50ms": 517,
+      "le100ms": 670,
+      "le250ms": 450,
+      "le500ms": 495,
+      "le1000ms": 37,
+      "le2500ms": 199,
+      "le5000ms": 7,
+      "le10000ms": 0,
+      "gt10000ms": 0
+    }
+  },
+  "memory": {
+    "peakRssBytes": 358367232,
+    "finalRssBytes": 333082624,
+    "peakQueueDepth": 20,
+    "dbFileBytes": 2461696
+  },
+  "effects": {
+    "completed": 1187,
+    "errored": 0,
+    "replayed": 0
+  },
+  "byEvent": {
+    "contact:sync-requested": {
+      "attempted": 993,
+      "admitted": 993,
+      "dropped": 0
+    },
+    "page:scrape-requested": {
+      "attempted": 405,
+      "admitted": 195,
+      "dropped": 210
+    }
+  },
+  "reportFiles": {
+    "text": "examples/reports/benchmarks/scraper-bounded__fleet-c40__scraper-c5__20260329-095521.txt",
+    "json": "examples/reports/benchmarks/scraper-bounded__fleet-c40__scraper-c5__20260329-095521.json"
+  }
+}

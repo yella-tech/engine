@@ -217,9 +217,20 @@ npm run example
 # Deferred review + dead-letter + requeue
 npm run example:approval
 
-# Throughput sweep across concurrency levels
-npm run load-test
+# Legacy load-test alias
+npm run load-test realistic
+
+# List named benchmark scenarios
+npm run benchmark:list
+
+# Run one scenario
+npm run benchmark -- api-mixed__fleet-c50
+
+# Run the full suite
+npm run benchmark:all
 ```
+
+The repeatable benchmark suite lives in [`examples/benchmarks`](./examples/benchmarks). It includes named scenarios for concurrency sweeps and bounded browser-like tasks, plus timestamped raw report output in [`examples/reports/benchmarks`](./examples/reports/benchmarks).
 
 ### UI Component Library
 

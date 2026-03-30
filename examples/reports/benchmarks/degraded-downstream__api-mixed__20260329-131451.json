@@ -1,0 +1,129 @@
+{
+  "scenario": {
+    "id": "degraded-downstream__api-mixed",
+    "label": "Degraded downstream (API mixed)",
+    "description": "Injects slower calls and rate-limited downstream behavior to show retries, dead letters, and degraded throughput.",
+    "family": "degraded-downstream",
+    "kind": "benchmark",
+    "visibility": "internal",
+    "tags": [
+      "degradation",
+      "retries",
+      "api"
+    ],
+    "phases": [
+      {
+        "label": "healthy",
+        "eventsPerSec": 22,
+        "durationSec": 60
+      },
+      {
+        "label": "slow",
+        "eventsPerSec": 30,
+        "durationSec": 60
+      },
+      {
+        "label": "rate-limited",
+        "eventsPerSec": 30,
+        "durationSec": 60
+      },
+      {
+        "label": "recovering",
+        "eventsPerSec": 22,
+        "durationSec": 60
+      },
+      {
+        "label": "cool-down",
+        "eventsPerSec": 0,
+        "durationSec": 60
+      }
+    ],
+    "notes": [
+      "The workload deliberately changes downstream conditions by phase.",
+      "This scenario exists to show retry recovery versus terminal failure behavior."
+    ],
+    "concurrency": 50
+  },
+  "startedAt": "2026-03-29T03:09:51.171Z",
+  "finishedAt": "2026-03-29T03:14:51.402Z",
+  "machine": {
+    "hostname": "lothlorien",
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 16,
+    "totalMemoryBytes": 66888458240,
+    "nodeVersion": "v24.14.0"
+  },
+  "totals": {
+    "seedAttempts": 6011,
+    "seedAdmitted": 6011,
+    "seedDropped": 0,
+    "runsCompleted": 14636,
+    "runsErrored": 54,
+    "retries": 268,
+    "deadLetters": 1,
+    "effectReplays": 0,
+    "restarts": 0,
+    "sqliteErrors": 0,
+    "throughputAvg": 49
+  },
+  "durations": {
+    "count": 14690,
+    "sumMs": 7264501,
+    "minMs": 7,
+    "maxMs": 8949,
+    "avgMs": 494.5201497617427,
+    "p50Ms": 250,
+    "p95Ms": 2500,
+    "histogram": {
+      "le10ms": 218,
+      "le50ms": 4646,
+      "le100ms": 2392,
+      "le250ms": 1512,
+      "le500ms": 1510,
+      "le1000ms": 2285,
+      "le2500ms": 1550,
+      "le5000ms": 485,
+      "le10000ms": 92,
+      "gt10000ms": 0
+    }
+  },
+  "memory": {
+    "peakRssBytes": 292978688,
+    "finalRssBytes": 167677952,
+    "peakQueueDepth": 118,
+    "dbFileBytes": 14725120,
+    "walFileBytes": 4181832
+  },
+  "effects": {
+    "completed": 5423,
+    "errored": 0,
+    "replayed": 0
+  },
+  "byEvent": {
+    "billing:sync-requested": {
+      "attempted": 1632,
+      "admitted": 1632,
+      "dropped": 0
+    },
+    "document:index-requested": {
+      "attempted": 1091,
+      "admitted": 1091,
+      "dropped": 0
+    },
+    "webhook:received": {
+      "attempted": 2749,
+      "admitted": 2749,
+      "dropped": 0
+    },
+    "approval:needed": {
+      "attempted": 539,
+      "admitted": 539,
+      "dropped": 0
+    }
+  },
+  "reportFiles": {
+    "text": "examples/reports/benchmarks/degraded-downstream__api-mixed__20260329-131451.txt",
+    "json": "examples/reports/benchmarks/degraded-downstream__api-mixed__20260329-131451.json"
+  }
+}

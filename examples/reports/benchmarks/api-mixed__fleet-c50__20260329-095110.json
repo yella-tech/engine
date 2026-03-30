@@ -1,0 +1,109 @@
+{
+  "scenario": {
+    "id": "api-mixed__fleet-c50",
+    "label": "API mixed workload (fleet concurrency 50)",
+    "description": "Mixed webhook, billing, and document automation with retries, slow outliers, and durable effects.",
+    "family": "api-mixed",
+    "tags": [
+      "sqlite",
+      "wal",
+      "retries",
+      "concurrency-sweep"
+    ],
+    "phases": [
+      {
+        "label": "warm-up",
+        "eventsPerSec": 4,
+        "durationSec": 15
+      },
+      {
+        "label": "steady",
+        "eventsPerSec": 12,
+        "durationSec": 30
+      },
+      {
+        "label": "peak",
+        "eventsPerSec": 24,
+        "durationSec": 30
+      },
+      {
+        "label": "cool-down",
+        "eventsPerSec": 0,
+        "durationSec": 15
+      }
+    ],
+    "notes": [
+      "Global concurrency is the only limit in this scenario.",
+      "Root events fan out into 2-3 stage chains with durable effects.",
+      "The intent is to show how the same runtime shape behaves as fleet concurrency changes."
+    ],
+    "concurrency": 50
+  },
+  "startedAt": "2026-03-28T23:49:40.849Z",
+  "finishedAt": "2026-03-28T23:51:10.997Z",
+  "totals": {
+    "seedAttempts": 1123,
+    "seedAdmitted": 1123,
+    "seedDropped": 0,
+    "runsCompleted": 2785,
+    "runsErrored": 12,
+    "retries": 32,
+    "deadLetters": 0,
+    "effectReplays": 0,
+    "sqliteErrors": 0,
+    "throughputAvg": 31
+  },
+  "durations": {
+    "count": 2797,
+    "sumMs": 765552,
+    "minMs": 7,
+    "maxMs": 4165,
+    "avgMs": 273.70468358956026,
+    "p50Ms": 250,
+    "p95Ms": 1000,
+    "histogram": {
+      "le10ms": 48,
+      "le50ms": 692,
+      "le100ms": 382,
+      "le250ms": 631,
+      "le500ms": 702,
+      "le1000ms": 258,
+      "le2500ms": 44,
+      "le5000ms": 40,
+      "le10000ms": 0,
+      "gt10000ms": 0
+    }
+  },
+  "memory": {
+    "peakRssBytes": 125829120,
+    "finalRssBytes": 118632448,
+    "peakQueueDepth": 19,
+    "dbFileBytes": 2936832
+  },
+  "effects": {
+    "completed": 1674,
+    "errored": 0,
+    "replayed": 0
+  },
+  "byEvent": {
+    "webhook:received": {
+      "attempted": 573,
+      "admitted": 573,
+      "dropped": 0
+    },
+    "billing:sync-requested": {
+      "attempted": 337,
+      "admitted": 337,
+      "dropped": 0
+    },
+    "document:index-requested": {
+      "attempted": 213,
+      "admitted": 213,
+      "dropped": 0
+    }
+  },
+  "reportFiles": {
+    "text": "examples/reports/benchmarks/api-mixed__fleet-c50__20260329-095110.txt",
+    "json": "examples/reports/benchmarks/api-mixed__fleet-c50__20260329-095110.json"
+  }
+}
