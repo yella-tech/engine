@@ -432,6 +432,25 @@ describe('createRunStore (memory)', () => {
       expect(store.get(child.id)?.parentRunId).toBe(parent.id)
     })
 
+    it('protects completed runs whose chain has an errored run', () => {
+      const parent = store.create('parent', 'evt', null)
+      store.transition(parent.id, 'running')
+      store.setResult(parent.id, { success: true })
+      store.transition(parent.id, 'completed')
+
+      // Child errored — shares correlationId with parent
+      const child = store.create('child', 'evt', null, parent.id)
+      store.transition(child.id, 'running')
+      store.transition(child.id, 'errored')
+
+      vi.advanceTimersByTime(100)
+
+      const pruned = store.pruneCompletedBefore!(Date.now() - 50)
+      expect(pruned).toHaveLength(0)
+      expect(store.get(parent.id)).not.toBeNull()
+      expect(store.get(child.id)).not.toBeNull()
+    })
+
     it('prunes completed chains bottom-up across successive sweeps', () => {
       const parent = store.create('parent', 'evt', null)
       store.transition(parent.id, 'running')

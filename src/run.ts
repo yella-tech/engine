@@ -407,9 +407,18 @@ export function createRunStore(): RunStore {
   }
 
   function pruneCompletedBefore(cutoffMs: number): string[] {
+    // Collect correlationIds with any errored run — these chains are protected
+    const erroredCorrelationIds = new Set<string>()
+    for (const run of runs.values()) {
+      if (run.state === 'errored') erroredCorrelationIds.add(run.correlationId)
+    }
+
     const prunedIds = new Set<string>()
     for (const [id, run] of runs.entries()) {
       if (run.state !== 'completed' || run.completedAt === null || run.completedAt >= cutoffMs || isDeferredRun(run)) {
+        continue
+      }
+      if (erroredCorrelationIds.has(run.correlationId)) {
         continue
       }
       if (run.childRunIds.some((childId) => runs.has(childId))) {

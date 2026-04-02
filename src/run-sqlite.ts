@@ -362,7 +362,9 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     paginatedDeadLetterStatusRootAsc: db.prepare(buildStatusQuery(`state = 'errored' AND ${DEAD_LETTER_MARKER_PREDICATE}`, 'asc', true)),
     countDeadLetterStatus: db.prepare(buildStatusCountQuery(`state = 'errored' AND ${DEAD_LETTER_MARKER_PREDICATE}`)),
     countDeadLetterStatusRoot: db.prepare(buildStatusCountQuery(`state = 'errored' AND ${DEAD_LETTER_MARKER_PREDICATE}`, true)),
-    pruneCompletedCandidates: db.prepare("SELECT * FROM runs WHERE state = 'completed' AND completed_at IS NOT NULL AND completed_at < ?"),
+    pruneCompletedCandidates: db.prepare(
+      "SELECT * FROM runs WHERE state = 'completed' AND completed_at IS NOT NULL AND completed_at < ? AND correlation_id NOT IN (SELECT DISTINCT correlation_id FROM runs WHERE state = 'errored')",
+    ),
     clearParentRunIds: db.prepare('UPDATE runs SET parent_run_id = NULL WHERE parent_run_id = ?'),
     deleteById: db.prepare('DELETE FROM runs WHERE id = ?'),
   }
