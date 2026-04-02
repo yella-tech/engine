@@ -129,10 +129,12 @@ export function registerRoutes<T extends Hono>(app: T, engine: RoutableEngine) {
       if (!overlay) return c.json({ error: 'Run not found' }, 404)
       return c.json(overlay)
     })
-    .get('/runs/:id/trace', (c) => {
+    .get('/runs/:id/trace', async (c) => {
       const trace = services.reads.trace(c.req.param('id'))
-      if (!trace) return c.json({ error: 'Run not found' }, 404)
-      return c.json(trace)
+      if (trace) return c.json(trace)
+      const archived = await services.reads.traceArchived?.(c.req.param('id'))
+      if (archived) return c.json({ ...archived, archived: true })
+      return c.json({ error: 'Run not found' }, 404)
     })
     .get('/runs/:id/effects', (c) => {
       const effects = services.reads.effects(c.req.param('id'))

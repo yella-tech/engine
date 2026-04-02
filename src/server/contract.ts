@@ -21,4 +21,6 @@ export interface RoutableEngine {
   getMetrics(): EngineMetrics
   getObservability(query?: EngineObservabilityQuery): EngineObservabilityReport
   subscribeEvents(listener: (event: EngineEvent) => void): () => void
+  getRunArchived?(id: string): Promise<Run | null>
+  getChainArchived?(correlationId: string): Promise<{ runs: Run[]; effects: Record<string, EffectRecord[]> } | null>
 }

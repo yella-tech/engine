@@ -286,6 +286,35 @@ export function createEngineRouteServices(engine: RoutableEngine, clock: EngineS
         if (!run) return null
         return { effects: engine.getEffects(runId) }
       },
+      async traceArchived(runId: string) {
+        if (!engine.getChainArchived) return null
+        const run = await engine.getRunArchived?.(runId)
+        if (!run) return null
+        const archived = await engine.getChainArchived(run.correlationId)
+        if (!archived) return null
+        const chain = archived.runs
+        const tree = buildTraceTree(chain)
+        const flat = flattenTrace(tree)
+        const gaps = buildTraceGaps(chain)
+        const timestamps = flat.flatMap((node) => [node.idleAt, node.runningAt, node.completedAt].filter((timestamp): timestamp is number => timestamp !== null))
+        const minTime = timestamps.length ? Math.min(...timestamps) : 0
+        const maxTime = timestamps.length ? Math.max(...timestamps) : 0
+        const executionDurationMs = flat.reduce((total, span) => {
+          if (span.runningAt === null || span.completedAt === null) return total
+          return total + Math.max(span.completedAt - span.runningAt, 0)
+        }, 0)
+        const pausedDurationMs = gaps.reduce((total, gap) => total + gap.durationMs, 0)
+        return {
+          correlationId: run.correlationId,
+          minTime,
+          maxTime,
+          durationMs: maxTime - minTime,
+          executionDurationMs,
+          pausedDurationMs,
+          gaps,
+          spans: flat,
+        }
+      },
       graph() {
         return engine.getGraph()
       },
