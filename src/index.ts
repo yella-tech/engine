@@ -10,6 +10,7 @@ import { getRunStatus } from './status.js'
 import { EngineError, ErrorCode } from './types.js'
 import { parseDurationMs, safeCallHook } from './util.js'
 import type {
+  ArchivedChain,
   DevServer,
   EffectRecord,
   EffectStore,
@@ -43,6 +44,7 @@ import type {
 } from './types.js'
 
 export type {
+  ArchivedChain,
   DevServer,
   DevServerOptions,
   DurationHistogram,
@@ -305,9 +307,36 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   let runtimeStarted = false
   let retentionTimer: ReturnType<typeof setInterval> | null = null
 
-  function pruneExpiredRuns(): string[] {
+  async function pruneExpiredRuns(): Promise<string[]> {
     if (retentionMs === null || !runStore.pruneCompletedBefore) return []
-    const prunedRunIds = runStore.pruneCompletedBefore(Date.now() - retentionMs)
+    const cutoff = Date.now() - retentionMs
+
+    if (opts.beforePrune && runStore.getCandidatesForPrune) {
+      const candidateIds = runStore.getCandidatesForPrune(cutoff)
+      if (candidateIds.length === 0) return []
+
+      const chainMap = new Map<string, { runs: Run[]; effects: Record<string, EffectRecord[]> }>()
+      for (const id of candidateIds) {
+        const run = runStore.get(id)
+        if (!run) continue
+        let chain = chainMap.get(run.correlationId)
+        if (!chain) {
+          chain = { runs: [], effects: {} }
+          chainMap.set(run.correlationId, chain)
+        }
+        chain.runs.push(run)
+        chain.effects[id] = effectStore.getEffects(id)
+      }
+
+      const chains: ArchivedChain[] = Array.from(chainMap.entries()).map(([correlationId, data]) => ({
+        correlationId,
+        ...data,
+      }))
+
+      await opts.beforePrune(chains)
+    }
+
+    const prunedRunIds = runStore.pruneCompletedBefore(cutoff)
     if (prunedRunIds.length > 0) {
       effectStore.deleteEffectsForRuns(prunedRunIds)
     }
@@ -315,20 +344,13 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   }
 
   if (retentionMs !== null) {
-    const sweepIntervalMs = Math.min(Math.max(Math.floor(retentionMs / 2), 10), 60_000)
+    const ONE_DAY_MS = 86_400_000
+    const sweepIntervalMs = retentionMs >= ONE_DAY_MS ? ONE_DAY_MS : Math.min(Math.max(Math.floor(retentionMs / 2), 10), 60_000)
     queueMicrotask(() => {
-      try {
-        pruneExpiredRuns()
-      } catch (err) {
-        reportInternalError(err, 'retention')
-      }
+      pruneExpiredRuns().catch((err) => reportInternalError(err, 'retention'))
     })
     retentionTimer = setInterval(() => {
-      try {
-        pruneExpiredRuns()
-      } catch (err) {
-        reportInternalError(err, 'retention')
-      }
+      pruneExpiredRuns().catch((err) => reportInternalError(err, 'retention'))
     }, sweepIntervalMs)
     retentionTimer.unref?.()
   }
@@ -818,6 +840,24 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     resume,
     stop,
     drain,
+    async getRunArchived(id: string): Promise<Run | null> {
+      const run = runStore.get(id)
+      if (run) return run
+      if (opts.runFallback) return opts.runFallback(id)
+      return null
+    },
+
+    async getChainArchived(correlationId: string): Promise<{ runs: Run[]; effects: Record<string, EffectRecord[]> } | null> {
+      const allRuns = runStore.getAll().filter((r) => r.correlationId === correlationId)
+      if (allRuns.length > 0) {
+        const effects: Record<string, EffectRecord[]> = {}
+        for (const r of allRuns) effects[r.id] = effectStore.getEffects(r.id)
+        return { runs: allRuns, effects }
+      }
+      if (opts.chainFallback) return opts.chainFallback(correlationId)
+      return null
+    },
+
     getServer,
   }
 

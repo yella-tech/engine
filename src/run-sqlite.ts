@@ -804,6 +804,12 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     return { runs: rows.map(rowToRun), total: totalRow.cnt }
   }
 
+  function getCandidatesForPrune(cutoffMs: number): string[] {
+    const candidateRows = stmts.pruneCompletedCandidates.all(cutoffMs) as RunRow[]
+    const candidates = candidateRows.map(rowToRun).filter((run) => !isDeferredRun(run))
+    return candidates.filter((run) => run.childRunIds.every((childId) => stmts.getById.get(childId) === undefined)).map((run) => run.id)
+  }
+
   function pruneCompletedBefore(cutoffMs: number): string[] {
     const pruneTransaction = db.transaction(() => {
       const candidateRows = stmts.pruneCompletedCandidates.all(cutoffMs) as RunRow[]
@@ -903,6 +909,7 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     getByStatePaginated,
     getByStatusPaginated,
     pruneCompletedBefore,
+    getCandidatesForPrune,
     close,
   }
 }

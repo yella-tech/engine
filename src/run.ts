@@ -406,26 +406,24 @@ export function createRunStore(): RunStore {
     return paginateRuns(filtered, limit, offset, opts)
   }
 
-  function pruneCompletedBefore(cutoffMs: number): string[] {
-    // Collect correlationIds with any errored run — these chains are protected
+  function getCandidatesForPrune(cutoffMs: number): string[] {
     const erroredCorrelationIds = new Set<string>()
     for (const run of runs.values()) {
       if (run.state === 'errored') erroredCorrelationIds.add(run.correlationId)
     }
 
-    const prunedIds = new Set<string>()
+    const candidateIds: string[] = []
     for (const [id, run] of runs.entries()) {
-      if (run.state !== 'completed' || run.completedAt === null || run.completedAt >= cutoffMs || isDeferredRun(run)) {
-        continue
-      }
-      if (erroredCorrelationIds.has(run.correlationId)) {
-        continue
-      }
-      if (run.childRunIds.some((childId) => runs.has(childId))) {
-        continue
-      }
-      prunedIds.add(id)
+      if (run.state !== 'completed' || run.completedAt === null || run.completedAt >= cutoffMs || isDeferredRun(run)) continue
+      if (erroredCorrelationIds.has(run.correlationId)) continue
+      if (run.childRunIds.some((childId) => runs.has(childId))) continue
+      candidateIds.push(id)
     }
+    return candidateIds
+  }
+
+  function pruneCompletedBefore(cutoffMs: number): string[] {
+    const prunedIds = new Set<string>(getCandidatesForPrune(cutoffMs))
 
     if (prunedIds.size === 0) return []
 
@@ -488,5 +486,6 @@ export function createRunStore(): RunStore {
     getByStatePaginated,
     getByStatusPaginated,
     pruneCompletedBefore,
+    getCandidatesForPrune,
   }
 }

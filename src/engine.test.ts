@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createEngine, ErrorCode } from './index.js'
 import type { EngineOptions } from './types.js'
 
@@ -882,6 +882,95 @@ function convenienceTests(label: string, opts: EngineOptions) {
 
 convenienceTests('memory', {})
 convenienceTests('sqlite', { store: { type: 'sqlite', path: ':memory:' } })
+
+function beforePruneTests(label: string, opts: EngineOptions) {
+  describe(`beforePrune / archive fallbacks (${label})`, () => {
+    let engine: ReturnType<typeof createEngine>
+
+    afterEach(() => {
+      engine?.stop()
+    })
+
+    it('sweep interval is daily for retention >= 1 day', async () => {
+      // With retention: '7d', the sweep interval is 1 day.
+      // A run completed just now should survive a short wait since
+      // the initial queueMicrotask prune fires immediately but the
+      // run is still within the 7-day window.
+      engine = createEngine({ ...opts, retention: '7d' })
+      engine.register('p', 'go', async () => ({ success: true }))
+      engine.emit('go', {})
+      await engine.drain()
+
+      // Wait for the initial queueMicrotask prune to fire
+      await new Promise((r) => setTimeout(r, 20))
+
+      const runs = engine.getCompleted()
+      expect(runs.length).toBeGreaterThan(0)
+    })
+
+    it('beforePrune is called before deletion with chain data', async () => {
+      const beforePrune = vi.fn(async () => {})
+      engine = createEngine({ ...opts, retention: 1, beforePrune })
+      engine.register('p', 'go', async () => ({ success: true }))
+      engine.emit('go', {})
+      await engine.drain()
+
+      // Wait for retention sweep (interval = max(floor(1/2), 10) = 10ms)
+      await new Promise((r) => setTimeout(r, 60))
+
+      expect(beforePrune).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            correlationId: expect.any(String),
+            runs: expect.arrayContaining([expect.objectContaining({ processName: 'p' })]),
+          }),
+        ]),
+      )
+    })
+
+    it('beforePrune failure skips deletion', async () => {
+      const beforePrune = vi.fn(async () => {
+        throw new Error('S3 down')
+      })
+      engine = createEngine({ ...opts, retention: 1, beforePrune })
+      engine.register('p', 'go', async () => ({ success: true }))
+      engine.emit('go', {})
+      await engine.drain()
+
+      // Wait for retention sweep to fire
+      await new Promise((r) => setTimeout(r, 60))
+
+      // Runs should still exist because beforePrune threw
+      expect(engine.getCompleted().length).toBeGreaterThan(0)
+    })
+
+    it('getRunArchived falls back to runFallback', async () => {
+      const fakeRun = { id: 'archived-1', processName: 'p' } as any
+      engine = createEngine({ ...opts, runFallback: async () => fakeRun })
+      const result = await engine.getRunArchived('archived-1')
+      expect(result).toBe(fakeRun)
+    })
+
+    it('getRunArchived returns local run when present', async () => {
+      engine = createEngine({ ...opts, runFallback: async () => null })
+      engine.register('p', 'go', async () => ({ success: true }))
+      const [run] = engine.emit('go', {})
+      await engine.drain()
+      const result = await engine.getRunArchived(run.id)
+      expect(result?.id).toBe(run.id)
+    })
+
+    it('getChainArchived falls back to chainFallback', async () => {
+      const fakeChain = { runs: [], effects: {} }
+      engine = createEngine({ ...opts, chainFallback: async () => fakeChain })
+      const result = await engine.getChainArchived('missing-corr')
+      expect(result).toBe(fakeChain)
+    })
+  })
+}
+
+beforePruneTests('memory', {})
+beforePruneTests('sqlite', { store: { type: 'sqlite', path: ':memory:' } })
 
 describe('getGraph', () => {
   it('builds graph from process registrations with explicit emits', async () => {

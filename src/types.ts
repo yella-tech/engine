@@ -179,6 +179,13 @@ export type Run = {
   handlerVersion: string | null
 }
 
+/** A chain of runs grouped by correlationId, with their effects. Used by the beforePrune hook. */
+export type ArchivedChain = {
+  correlationId: string
+  runs: Run[]
+  effects: Record<string, EffectRecord[]>
+}
+
 /**
  * The value returned by a process handler after execution.
  */
@@ -542,6 +549,8 @@ export type RunStore = {
   hasState?(state: ProcessState): boolean
   /** Delete completed non-deferred runs older than the cutoff. Returns the deleted run IDs. */
   pruneCompletedBefore?(cutoffMs: number): string[]
+  /** Return IDs of completed runs eligible for pruning (read-only, does not delete). */
+  getCandidatesForPrune?(cutoffMs: number): string[]
   /** Close the underlying storage connection, if applicable. */
   close?(): void
 }
@@ -568,6 +577,21 @@ export type EngineOptions = {
    * Effect records for deleted runs are pruned alongside them.
    */
   retention?: number | string
+  /**
+   * Called before pruning with the chains about to be deleted, grouped by correlationId.
+   * If this callback throws, pruning is skipped for this cycle.
+   * Use this to archive data to external storage before deletion.
+   */
+  beforePrune?: (chains: ArchivedChain[]) => Promise<void>
+  /**
+   * Fallback for resolving a run by ID when not found in the primary store.
+   * Enables serving archived/historical run data (e.g. from S3).
+   */
+  runFallback?: (runId: string) => Promise<Run | null>
+  /**
+   * Fallback for resolving a full chain by correlationId when not found in the primary store.
+   */
+  chainFallback?: (correlationId: string) => Promise<{ runs: Run[]; effects: Record<string, EffectRecord[]> } | null>
   /** Called when a run is retried after failure. */
   onRetry?: (run: Run, error: string, attempt: number) => void
   /** Called when a run exhausts its retry budget and is marked with dead-letter status. */
@@ -878,6 +902,14 @@ export interface Engine {
    * @throws {@link EngineError} with code {@link ErrorCode.DRAIN_TIMEOUT} if runs don't finish in time.
    */
   drain(timeoutMs?: number): Promise<void>
+
+  /** Retrieve a run by ID, falling back to archive storage if configured. */
+  getRunArchived(id: string): Promise<Run | null>
+  /** Retrieve a chain by correlationId, falling back to archive storage if configured. */
+  getChainArchived(correlationId: string): Promise<{
+    runs: Run[]
+    effects: Record<string, EffectRecord[]>
+  } | null>
 
   /**
    * Get the dev server handle. Returns `null` if no `server` option was
