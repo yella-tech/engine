@@ -82,6 +82,7 @@ export function createRunStore(): RunStore {
       leaseExpiresAt: null,
       heartbeatAt: null,
       handlerVersion: null,
+      archived: false,
     }
 
     runs.set(id, run)
@@ -414,9 +415,16 @@ export function createRunStore(): RunStore {
 
     const candidateIds: string[] = []
     for (const [id, run] of runs.entries()) {
+      if (run.archived) continue
       if (run.state !== 'completed' || run.completedAt === null || run.completedAt >= cutoffMs || isDeferredRun(run)) continue
       if (erroredCorrelationIds.has(run.correlationId)) continue
-      if (run.childRunIds.some((childId) => runs.has(childId))) continue
+      if (
+        run.childRunIds.some((childId) => {
+          const child = runs.get(childId)
+          return child && !child.archived
+        })
+      )
+        continue
       candidateIds.push(id)
     }
     return candidateIds
@@ -426,12 +434,6 @@ export function createRunStore(): RunStore {
     const prunedIds = new Set<string>(getCandidatesForPrune(cutoffMs))
 
     if (prunedIds.size === 0) return []
-
-    const impactedParentIds = new Set<string>()
-    for (const id of prunedIds) {
-      const run = runs.get(id)
-      if (run?.parentRunId) impactedParentIds.add(run.parentRunId)
-    }
 
     for (const id of prunedIds) {
       const concurrencyProcess = concurrencyRunProcesses.get(id)
@@ -443,19 +445,12 @@ export function createRunStore(): RunStore {
         }
         concurrencyRunProcesses.delete(id)
       }
-      runs.delete(id)
-    }
-
-    for (const parentId of impactedParentIds) {
-      const parent = runs.get(parentId)
-      if (!parent) continue
-      parent.childRunIds = parent.childRunIds.filter((childId) => !prunedIds.has(childId))
-    }
-
-    for (const run of runs.values()) {
-      if (run.parentRunId && prunedIds.has(run.parentRunId)) {
-        run.parentRunId = null
-      }
+      const run = runs.get(id)!
+      run.payload = null
+      run.result = null
+      run.timeline = []
+      run.context = {}
+      run.archived = true
     }
 
     return Array.from(prunedIds)

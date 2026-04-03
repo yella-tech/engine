@@ -12,6 +12,8 @@ function downgradeSchemaToV9(dbPath: string): void {
     DROP TABLE run_emissions;
     DROP TABLE run_concurrency_meta;
     DROP TABLE active_concurrency;
+    DROP INDEX IF EXISTS idx_runs_archived;
+    ALTER TABLE runs DROP COLUMN archived;
     PRAGMA user_version = 9;
   `)
   db.close()
@@ -359,13 +361,18 @@ describe('createSqliteRunStore', () => {
       const firstPruned = store.pruneCompletedBefore!(Date.now() - 50)
       expect(firstPruned).not.toContain(parent.id)
       expect(firstPruned).toContain(child.id)
-      expect(store.get(parent.id)).not.toBeNull()
-      expect(store.get(child.id)).toBeNull()
+      const archivedChild = store.get(child.id)
+      expect(archivedChild).not.toBeNull()
+      expect(archivedChild!.archived).toBe(true)
+      expect(archivedChild!.payload).toBeNull()
+      expect(archivedChild!.timeline).toEqual([])
 
       const secondPruned = store.pruneCompletedBefore!(Date.now() - 50)
       expect(secondPruned).toContain(parent.id)
-      expect(store.get(parent.id)).toBeNull()
-      expect(store.get(child.id)).toBeNull()
+      const archivedParent = store.get(parent.id)
+      expect(archivedParent).not.toBeNull()
+      expect(archivedParent!.archived).toBe(true)
+      expect(archivedParent!.payload).toBeNull()
     })
   })
 

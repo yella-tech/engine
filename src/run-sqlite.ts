@@ -27,6 +27,7 @@ type RunRow = {
   lease_expires_at: number | null
   heartbeat_at: number | null
   handler_version: string | null
+  archived: number
 }
 
 function rowToRun(row: RunRow): Run {
@@ -52,6 +53,7 @@ function rowToRun(row: RunRow): Run {
     leaseExpiresAt: row.lease_expires_at,
     heartbeatAt: row.heartbeat_at,
     handlerVersion: row.handler_version,
+    archived: row.archived === 1,
   }
 }
 
@@ -255,6 +257,13 @@ const migrations: ((db: Database.Database) => void)[] = [
       WHERE r.state IN ('idle', 'running')
     `)
   },
+  // Migration 11 → 12: archive flag for retention
+  (db) => {
+    db.exec(`
+      ALTER TABLE runs ADD COLUMN archived INTEGER NOT NULL DEFAULT 0;
+      CREATE INDEX idx_runs_archived ON runs(archived);
+    `)
+  },
 ]
 
 function applyMigrations(db: Database.Database) {
@@ -363,10 +372,9 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     countDeadLetterStatus: db.prepare(buildStatusCountQuery(`state = 'errored' AND ${DEAD_LETTER_MARKER_PREDICATE}`)),
     countDeadLetterStatusRoot: db.prepare(buildStatusCountQuery(`state = 'errored' AND ${DEAD_LETTER_MARKER_PREDICATE}`, true)),
     pruneCompletedCandidates: db.prepare(
-      "SELECT * FROM runs WHERE state = 'completed' AND completed_at IS NOT NULL AND completed_at < ? AND correlation_id NOT IN (SELECT DISTINCT correlation_id FROM runs WHERE state = 'errored')",
+      "SELECT * FROM runs WHERE state = 'completed' AND completed_at IS NOT NULL AND completed_at < ? AND archived = 0 AND correlation_id NOT IN (SELECT DISTINCT correlation_id FROM runs WHERE state = 'errored')",
     ),
-    clearParentRunIds: db.prepare('UPDATE runs SET parent_run_id = NULL WHERE parent_run_id = ?'),
-    deleteById: db.prepare('DELETE FROM runs WHERE id = ?'),
+    archiveById: db.prepare("UPDATE runs SET payload = NULL, result = NULL, timeline = '[]', context = '{}', archived = 1 WHERE id = ?"),
   }
 
   function syncConcurrencyForStateChange(runId: string, currentState: ProcessState, nextState: ProcessState): void {
@@ -412,6 +420,7 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
       leaseExpiresAt: null,
       heartbeatAt: null,
       handlerVersion: null,
+      archived: false,
     }
 
     stmts.insert.run({
@@ -804,10 +813,15 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     return { runs: rows.map(rowToRun), total: totalRow.cnt }
   }
 
+  function isChildArchivable(childId: string): boolean {
+    const row = stmts.getById.get(childId) as RunRow | undefined
+    return !row || row.archived === 1
+  }
+
   function getCandidatesForPrune(cutoffMs: number): string[] {
     const candidateRows = stmts.pruneCompletedCandidates.all(cutoffMs) as RunRow[]
     const candidates = candidateRows.map(rowToRun).filter((run) => !isDeferredRun(run))
-    return candidates.filter((run) => run.childRunIds.every((childId) => stmts.getById.get(childId) === undefined)).map((run) => run.id)
+    return candidates.filter((run) => run.childRunIds.every(isChildArchivable)).map((run) => run.id)
   }
 
   function pruneCompletedBefore(cutoffMs: number): string[] {
@@ -816,29 +830,14 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
       const candidates = candidateRows.map(rowToRun).filter((run) => !isDeferredRun(run))
       if (candidates.length === 0) return []
 
-      const candidateById = new Map(candidates.map((run) => [run.id, run]))
-      const prunedIds = new Set(candidates.filter((run) => run.childRunIds.every((childId) => stmts.getById.get(childId) === undefined)).map((run) => run.id))
+      const prunedIds = new Set(candidates.filter((run) => run.childRunIds.every(isChildArchivable)).map((run) => run.id))
 
       if (prunedIds.size === 0) return []
-
-      const impactedParentIds = new Set(
-        Array.from(prunedIds)
-          .map((id) => candidateById.get(id)?.parentRunId ?? null)
-          .filter((id): id is string => id !== null),
-      )
-
-      for (const parentId of impactedParentIds) {
-        const parentRow = stmts.getById.get(parentId) as RunRow | undefined
-        if (!parentRow) continue
-        const nextChildIds = (JSON.parse(parentRow.child_run_ids) as string[]).filter((childId) => !prunedIds.has(childId))
-        stmts.updateChildRunIds.run(JSON.stringify(nextChildIds), parentId)
-      }
 
       for (const runId of prunedIds) {
         stmts.releaseConcurrencyByRunId.run(runId)
         stmts.deleteConcurrencyMetaByRunId.run(runId)
-        stmts.clearParentRunIds.run(runId)
-        stmts.deleteById.run(runId)
+        stmts.archiveById.run(runId)
       }
 
       return Array.from(prunedIds)

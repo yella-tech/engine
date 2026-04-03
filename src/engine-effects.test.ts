@@ -155,7 +155,10 @@ function effectTests(storeType: string, engineOpts: EngineOptions) {
 
       await new Promise((r) => setTimeout(r, 80))
 
-      expect(engine.getRun(completed.id)).toBeNull()
+      const archivedRun = engine.getRun(completed.id)
+      expect(archivedRun).not.toBeNull()
+      expect(archivedRun!.archived).toBe(true)
+      expect(archivedRun!.payload).toBeNull()
       expect(engine.getEffects(completed.id)).toHaveLength(0)
       expect(engine.getRun(deferred.id)).not.toBeNull()
     })

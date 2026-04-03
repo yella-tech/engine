@@ -177,6 +177,8 @@ export type Run = {
   heartbeatAt: number | null
   /** Version string of the handler that processed this run, or `null`. */
   handlerVersion: string | null
+  /** Whether this run has been archived (heavy fields stripped, detail in external storage). */
+  archived: boolean
 }
 
 /** A chain of runs grouped by correlationId, with their effects. Used by the beforePrune hook. */
