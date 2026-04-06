@@ -382,6 +382,14 @@ export function createRunStore(): RunStore {
       const eventName = opts.eventName
       filtered = filtered.filter((run) => run.eventName === eventName)
     }
+    if (opts?.processName) {
+      const processName = opts.processName
+      filtered = filtered.filter((run) => run.processName === processName)
+    }
+    if (opts?.correlationId) {
+      const correlationId = opts.correlationId
+      filtered = filtered.filter((run) => run.correlationId === correlationId)
+    }
     filtered.sort((a, b) => (order === 'asc' ? a.startedAt - b.startedAt : b.startedAt - a.startedAt))
     return {
       runs: filtered.slice(offset, offset + limit).map(cloneRun),

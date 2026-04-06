@@ -51,7 +51,7 @@ export function createEngineDashboardPlugin(options: EngineDashboardPluginOption
           onGraph={() => ctx.navigate('/graph')}
         />
       ),
-      runs: (ctx) => <RunsPanel onRowClick={ctx.overlayActions.openOverlay} activeRunId={ctx.overlay.open ? ctx.overlay.runId : null} />,
+      runs: (ctx) => <RunsPanel onRowClick={ctx.overlayActions.openOverlay} activeRunId={ctx.overlay.open ? ctx.overlay.runId : null} initialQuery={ctx.route.query} />,
       trace: (ctx) => <TracePanel chainId={ctx.route.params.chainId} onSpanClick={ctx.overlayActions.openOverlay} />,
       'trace-detail': (ctx) => <TracePanel chainId={ctx.route.params.chainId} onSpanClick={ctx.overlayActions.openOverlay} />,
       graph: (ctx) => <GraphPanel chainId={ctx.route.params.chainId} onNodeClick={ctx.overlayActions.openOverlay} />,

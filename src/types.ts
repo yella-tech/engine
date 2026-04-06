@@ -80,6 +80,10 @@ export type RunQueryOptions = {
   order?: RunSortOrder
   /** Filter to runs triggered by a specific event name. */
   eventName?: string
+  /** Filter to runs owned by a specific process. */
+  processName?: string
+  /** Filter to runs with a specific correlation ID. */
+  correlationId?: string
 }
 
 /**

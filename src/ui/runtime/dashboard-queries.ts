@@ -10,7 +10,17 @@ type HealthResult = Awaited<ReturnType<DashboardRuntimeRpc['health']['get']>>
 type OverviewResult = Awaited<ReturnType<DashboardRuntimeRpc['overview']['get']>>
 type OverlayResult = Awaited<ReturnType<DashboardRuntimeRpc['runs']['overlay']>>
 
-export function useRunsListQuery(params: { limit: number; offset?: number; status?: string; root?: boolean; pollMs?: number; enabled?: boolean }) {
+export function useRunsListQuery(params: {
+  limit: number
+  offset?: number
+  status?: string
+  root?: boolean
+  processName?: string
+  eventName?: string
+  correlationId?: string
+  pollMs?: number
+  enabled?: boolean
+}) {
   const { rpc } = useDashboardRuntimeDeps()
   const fetcher = useCallback(
     () =>
@@ -19,12 +29,26 @@ export function useRunsListQuery(params: { limit: number; offset?: number; statu
         offset: params.offset,
         status: params.status,
         root: params.root,
+        processName: params.processName,
+        eventName: params.eventName,
+        correlationId: params.correlationId,
       }),
-    [params.limit, params.offset, params.root, params.status, rpc],
+    [params.limit, params.offset, params.root, params.status, params.processName, params.eventName, params.correlationId, rpc],
   )
 
   return useDashboardQuery<RunsListResult>({
-    key: ['runs:list', { limit: params.limit, offset: params.offset ?? 0, status: params.status ?? null, root: !!params.root }],
+    key: [
+      'runs:list',
+      {
+        limit: params.limit,
+        offset: params.offset ?? 0,
+        status: params.status ?? null,
+        root: !!params.root,
+        processName: params.processName ?? null,
+        eventName: params.eventName ?? null,
+        correlationId: params.correlationId ?? null,
+      },
+    ],
     fetcher,
     enabled: params.enabled,
     pollMs: params.pollMs,

@@ -213,8 +213,8 @@ export function createEngineRouteServices(engine: RoutableEngine, clock: EngineS
         const bucketMs = query.bucketMs ?? (query.windowMs ? defaultBucketMsForWindow(query.windowMs) : undefined)
         return engine.getObservability({ from, to, bucketMs, errorLimit: query.errorLimit })
       },
-      runs(opts: { state: ProcessState | null; status: RunStatus | null; limit: number; offset: number; root: boolean; eventName?: string }) {
-        const queryOpts = { root: opts.root, eventName: opts.eventName }
+      runs(opts: { state: ProcessState | null; status: RunStatus | null; limit: number; offset: number; root: boolean; eventName?: string; processName?: string; correlationId?: string }) {
+        const queryOpts = { root: opts.root, eventName: opts.eventName, processName: opts.processName, correlationId: opts.correlationId }
         const result = opts.status ? engine.getRunsByStatusPaginated(opts.status, opts.limit, opts.offset, queryOpts) : engine.getRunsPaginated(opts.state, opts.limit, opts.offset, queryOpts)
 
         return {

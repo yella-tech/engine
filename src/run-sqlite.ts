@@ -748,7 +748,7 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     const root = opts?.root ?? false
     const order = opts?.order ?? 'desc'
 
-    if (opts?.eventName) {
+    if (opts?.eventName || opts?.processName || opts?.correlationId) {
       const clauses: string[] = []
       const params: unknown[] = []
       if (state) {
@@ -756,8 +756,18 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
         params.push(state)
       }
       if (root) clauses.push('parent_run_id IS NULL')
-      clauses.push('event_name = ?')
-      params.push(opts.eventName)
+      if (opts?.eventName) {
+        clauses.push('event_name = ?')
+        params.push(opts.eventName)
+      }
+      if (opts?.processName) {
+        clauses.push('process_name = ?')
+        params.push(opts.processName)
+      }
+      if (opts?.correlationId) {
+        clauses.push('correlation_id = ?')
+        params.push(opts.correlationId)
+      }
       const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : ''
       const rows = db.prepare(`SELECT * FROM runs ${where} ORDER BY started_at ${order.toUpperCase()} LIMIT ? OFFSET ?`).all(...params, limit, offset) as RunRow[]
       const total = (db.prepare(`SELECT COUNT(*) as cnt FROM runs ${where}`).get(...params) as { cnt: number }).cnt
@@ -784,7 +794,7 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
       return getByStatePaginated(status, limit, offset, opts)
     }
 
-    if (opts?.eventName) {
+    if (opts?.eventName || opts?.processName || opts?.correlationId) {
       const root = opts?.root ?? false
       const order = opts?.order ?? 'desc'
       const statusWhere =
@@ -795,8 +805,20 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
             : status === 'errored'
               ? `state = 'errored' AND NOT (${DEAD_LETTER_MARKER_PREDICATE})`
               : `state = 'errored' AND ${DEAD_LETTER_MARKER_PREDICATE}`
-      const clauses = [statusWhere, 'event_name = ?']
-      const params: unknown[] = [opts.eventName]
+      const clauses = [statusWhere]
+      const params: unknown[] = []
+      if (opts?.eventName) {
+        clauses.push('event_name = ?')
+        params.push(opts.eventName)
+      }
+      if (opts?.processName) {
+        clauses.push('process_name = ?')
+        params.push(opts.processName)
+      }
+      if (opts?.correlationId) {
+        clauses.push('correlation_id = ?')
+        params.push(opts.correlationId)
+      }
       if (root) clauses.push('parent_run_id IS NULL')
       const where = `WHERE ${clauses.join(' AND ')}`
       const rows = db.prepare(`SELECT * FROM runs ${where} ORDER BY started_at ${order.toUpperCase()} LIMIT ? OFFSET ?`).all(...params, limit, offset) as RunRow[]

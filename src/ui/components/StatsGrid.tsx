@@ -1,3 +1,10 @@
+const statusHref: Record<string, string> = {
+  Running: '#/runs?status=running',
+  Idle: '#/runs?status=idle',
+  Completed: '#/runs?status=completed',
+  Errored: '#/runs?status=errored',
+}
+
 export function StatsGrid({ queue, extra }: { queue: Record<string, number>; extra?: Array<{ label: string; value: number | string }> }) {
   const stats: [string, number][] = [
     ['Running', queue.running],
@@ -9,12 +16,14 @@ export function StatsGrid({ queue, extra }: { queue: Record<string, number>; ext
   return (
     <div class={`grid grid-${hasExtra ? 4 + extra.length : 4} mb-5`}>
       {stats.map(([label, val]) => (
-        <div class="card card-flat" key={label}>
-          <div class="card-body">
-            <span class="label-muted">{label}</span>
-            <div class="stat-value">{val ?? 0}</div>
+        <a href={statusHref[label]} key={label} style={{ textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>
+          <div class="card card-flat">
+            <div class="card-body">
+              <span class="label-muted">{label}</span>
+              <div class="stat-value">{val ?? 0}</div>
+            </div>
           </div>
-        </div>
+        </a>
       ))}
       {extra?.map((item) => (
         <div class="card card-flat" key={item.label}>

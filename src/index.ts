@@ -475,6 +475,8 @@ export function createEngine(opts: EngineOptions = {}): Engine {
               : runStore.getByState(status)
     if (opts?.root) runs = runs.filter((r) => r.parentRunId === null)
     if (opts?.eventName) runs = runs.filter((r) => r.eventName === opts.eventName)
+    if (opts?.processName) runs = runs.filter((r) => r.processName === opts.processName)
+    if (opts?.correlationId) runs = runs.filter((r) => r.correlationId === opts.correlationId)
     const order = opts?.order ?? 'desc'
     runs.sort((a, b) => (order === 'asc' ? a.startedAt - b.startedAt : b.startedAt - a.startedAt))
     return { runs: runs.slice(offset, offset + limit), total: runs.length }
@@ -485,6 +487,8 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     let runs = state ? runStore.getByState(state) : runStore.getAll()
     if (opts?.root) runs = runs.filter((r) => r.parentRunId === null)
     if (opts?.eventName) runs = runs.filter((r) => r.eventName === opts.eventName)
+    if (opts?.processName) runs = runs.filter((r) => r.processName === opts.processName)
+    if (opts?.correlationId) runs = runs.filter((r) => r.correlationId === opts.correlationId)
     const order = opts?.order ?? 'desc'
     runs.sort((a, b) => (order === 'asc' ? a.startedAt - b.startedAt : b.startedAt - a.startedAt))
     return { runs: runs.slice(offset, offset + limit), total: runs.length }
