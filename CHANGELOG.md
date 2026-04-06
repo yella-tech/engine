@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.15.0 - 2026-04-07
+
+### Added
+- **Archive-in-place retention**: completed runs are now stripped of heavy fields (`payload`, `result`, `timeline`, `context`) instead of deleted. Metadata stays in SQLite permanently for dashboards and audit trails. An `archived` boolean flag is set on stripped runs.
+- **Errored chain protection**: retention pruning skips any completed run whose correlation chain contains an errored run. Entire chains stay intact for debugging until the error is resolved.
+- **`beforePrune` hook**: optional async callback on `EngineOptions`, called with full run + effect data grouped by correlation ID before stripping. Enables archiving payloads to external storage (e.g. S3) before they're removed from SQLite.
+- **`getCandidatesForPrune`**: read-only method on `RunStore` that returns IDs eligible for pruning without modifying them.
+- **`getRunArchived` / `getChainArchived`**: async methods on the `Engine` interface with optional `runFallback` and `chainFallback` callbacks for serving archived detail from external storage.
+- **`ArchivedChain` type**: exported type for the chain data passed to `beforePrune`.
+- Dashboard trace route falls back to archived chains when a run is not found in SQLite, with an `archived: true` flag in the response.
+
+### Changed
+- Retention sweep interval is now daily for retention values >= 1 day (was capped at 60 seconds). Short retention values for testing retain the existing fast-sweep behavior.
+- SQLite schema migration 11→12 adds the `archived` column and index.
+
 ## 0.14.5 - 2026-03-21
 
 ### Changed
