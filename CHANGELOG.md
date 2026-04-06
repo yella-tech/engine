@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.16.0 - 2026-04-07
+
+### Changed
+- Consolidated brutalist.css — single canonical source in `state/shared/style/`, engine copies via prebuild.
+- Form elements (input, textarea, select) now have consistent `box-shadow` matching cards and buttons.
+- Filter tabs on runs page replaced with a brutalist select dropdown.
+- Stat cards are clickable (link to filtered runs view) with hover effect.
+- Runs page: filter by process name, event name, and correlation ID (full stack).
+- Root-only checkbox uses proper brutalist `.checkbox` styling.
+
+### Added
+- Alert variants: `.alert-info`, `.alert-warning`, `.alert-danger`.
+- Design tokens: `--muted-light`, `--surface-dark`, `--border-muted`.
+- Engine prebuild script copies canonical CSS from state repo.
+- Inputs inside `.panel-toolbar` auto-flex to fill available space.
+
 ## 0.15.0 - 2026-04-07
 
 ### Added
