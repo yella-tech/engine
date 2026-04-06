@@ -10,12 +10,12 @@ const RUN_FILTERS = [
 
 export function FilterTabs({ active, onChange }: { active: string; onChange: (f: string) => void }) {
   return (
-    <div class="tabs mb-4">
+    <select class="select" value={active} onChange={(e) => onChange((e.target as HTMLSelectElement).value)} style={{ width: 'auto' }}>
       {RUN_FILTERS.map((filter) => (
-        <button key={filter.value} class={`tab ${active === filter.value ? 'active' : ''}`} onClick={() => onChange(filter.value)}>
+        <option key={filter.value} value={filter.value}>
           {filter.label}
-        </button>
+        </option>
       ))}
-    </div>
+    </select>
   )
 }

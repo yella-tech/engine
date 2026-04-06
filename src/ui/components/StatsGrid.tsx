@@ -16,8 +16,8 @@ export function StatsGrid({ queue, extra }: { queue: Record<string, number>; ext
   return (
     <div class={`grid grid-${hasExtra ? 4 + extra.length : 4} mb-5`}>
       {stats.map(([label, val]) => (
-        <a href={statusHref[label]} key={label} style={{ textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>
-          <div class="card card-flat">
+        <a href={statusHref[label]} key={label} style={{ textDecoration: 'none', color: 'inherit' }}>
+          <div class="card card-hover">
             <div class="card-body">
               <span class="label-muted">{label}</span>
               <div class="stat-value">{val ?? 0}</div>

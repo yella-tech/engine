@@ -34,7 +34,37 @@ export function RunsPanel({ onRowClick, activeRunId, initialQuery }: { onRowClic
     <div>
       <div class="panel-toolbar mb-4">
         <FilterTabs active={filter} onChange={onFilterChange} />
-        <label class="panel-toggle">
+        <input
+          type="text"
+          placeholder="Process"
+          value={processName}
+          onInput={(e) => {
+            setProcessName((e.target as HTMLInputElement).value)
+            setOffset(0)
+          }}
+          class="input"
+        />
+        <input
+          type="text"
+          placeholder="Event"
+          value={eventName}
+          onInput={(e) => {
+            setEventName((e.target as HTMLInputElement).value)
+            setOffset(0)
+          }}
+          class="input"
+        />
+        <input
+          type="text"
+          placeholder="Correlation ID"
+          value={correlationId}
+          onInput={(e) => {
+            setCorrelationId((e.target as HTMLInputElement).value)
+            setOffset(0)
+          }}
+          class="input"
+        />
+        <label class="checkbox">
           <input
             type="checkbox"
             checked={rootOnly}
@@ -45,38 +75,6 @@ export function RunsPanel({ onRowClick, activeRunId, initialQuery }: { onRowClic
           />
           Root only
         </label>
-      </div>
-      <div class="panel-toolbar mb-4" style={{ gap: '8px' }}>
-        <input
-          type="text"
-          placeholder="Process name"
-          value={processName}
-          onInput={(e) => {
-            setProcessName((e.target as HTMLInputElement).value)
-            setOffset(0)
-          }}
-          class="input-filter"
-        />
-        <input
-          type="text"
-          placeholder="Event name"
-          value={eventName}
-          onInput={(e) => {
-            setEventName((e.target as HTMLInputElement).value)
-            setOffset(0)
-          }}
-          class="input-filter"
-        />
-        <input
-          type="text"
-          placeholder="Correlation ID"
-          value={correlationId}
-          onInput={(e) => {
-            setCorrelationId((e.target as HTMLInputElement).value)
-            setOffset(0)
-          }}
-          class="input-filter"
-        />
       </div>
       {runs.length === 0 ? <div class="empty">No runs found</div> : <RunsTable runs={runs} onRowClick={onRowClick} activeRunId={activeRunId} />}
       <Pagination offset={offset} pageSize={PAGE_SIZE} total={total} onPrev={() => setOffset(Math.max(0, offset - PAGE_SIZE))} onNext={() => setOffset(offset + PAGE_SIZE)} />
