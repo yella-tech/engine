@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.17.0 - 2026-09-08
 
 ### Added
 - **`onIdle` hook**: `EngineOptions.onIdle(nextWakeAt)` fires when no runs are active and nothing is claimable right now, with the epoch-ms time of the earliest pending retry (or `null`). Lets hosts that sleep the process (serverless, Fly Sprites) arrange an external wake-up.
