@@ -93,10 +93,16 @@ export type { RoutableEngine } from './server/routes.js'
 export { serveDashboard, resolveEngineUiDir, createDevServer } from './server/index.js'
 
 function buildStores(opts: EngineOptions): { runStore: RunStore; effectStore: EffectStore; observabilityStore: ReturnType<typeof createMemoryEngineObservabilityStore>; close?: () => void } {
-  if (opts.store === 'memory') {
+  if (opts.store === 'memory' || (typeof opts.store === 'object' && opts.store.type === 'memory')) {
     return { runStore: createRunStore(), effectStore: createEffectStore(), observabilityStore: createMemoryEngineObservabilityStore() }
   }
   if (opts.store) {
+    if (opts.store.type !== 'sqlite') {
+      throw new EngineError(ErrorCode.INVALID_CONFIG, `store.type must be 'memory' or 'sqlite', got ${String((opts.store as { type: unknown }).type)}`)
+    }
+    if (typeof opts.store.path !== 'string' || opts.store.path.length === 0) {
+      throw new EngineError(ErrorCode.INVALID_CONFIG, 'store.path is required for the sqlite store')
+    }
     const stores = createSqliteStores(opts.store.path)
     return { runStore: stores.runStore, effectStore: stores.effectStore, observabilityStore: stores.observabilityStore, close: stores.close }
   }
@@ -300,8 +306,14 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     defaultRetry: opts.retry,
     emitEvent,
   })
-  const dispatcher = createDispatcher(runStore, bus.executeRun, concurrency, { leaseOwner, leaseTimeoutMs, heartbeatIntervalMs }, reportInternalError, (runId, message) =>
-    bus.abortRun(runId, 'lease', message),
+  const dispatcher = createDispatcher(
+    runStore,
+    bus.executeRun,
+    concurrency,
+    { leaseOwner, leaseTimeoutMs, heartbeatIntervalMs },
+    reportInternalError,
+    (runId, message) => bus.abortRun(runId, 'lease', message),
+    opts.onIdle,
   )
   let acceptingEvents = true
   let runtimeStarted = false
@@ -310,10 +322,12 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   async function pruneExpiredRuns(): Promise<string[]> {
     if (retentionMs === null || !runStore.pruneCompletedBefore) return []
     const cutoff = Date.now() - retentionMs
+    let offeredIds: string[] | undefined
 
     if (opts.beforePrune && runStore.getCandidatesForPrune) {
       const candidateIds = runStore.getCandidatesForPrune(cutoff)
       if (candidateIds.length === 0) return []
+      offeredIds = candidateIds
 
       const chainMap = new Map<string, { runs: Run[]; effects: Record<string, EffectRecord[]> }>()
       for (const id of candidateIds) {
@@ -336,7 +350,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
       await opts.beforePrune(chains)
     }
 
-    const prunedRunIds = runStore.pruneCompletedBefore(cutoff)
+    const prunedRunIds = runStore.pruneCompletedBefore(cutoff, offeredIds)
     if (prunedRunIds.length > 0) {
       effectStore.deleteEffectsForRuns(prunedRunIds)
     }
@@ -360,7 +374,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   if (opts.server) {
     const serverOpts = opts.server
     serverPromise = import('./server/index.js').then(async ({ createDevServer, serveDashboard, resolveEngineUiDir }) => {
-      const raw = createDevServer(engine, { dashboardFallback: false })
+      const raw = createDevServer(engine, { dashboardFallback: false, middleware: serverOpts.middleware })
       serveDashboard(raw.app, resolveEngineUiDir())
       await raw.serve({ host: serverOpts.host, port: serverOpts.port })
       return {
@@ -560,12 +574,24 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   async function stop(stopOpts?: { graceful?: boolean; timeoutMs?: number }): Promise<void> {
     acceptingEvents = false
     dispatcher.pause()
+    let timedOut: EngineError | null = null
     if (stopOpts?.graceful) {
       const timeout = stopOpts.timeoutMs ?? 30_000
-      await Promise.race([
-        dispatcher.waitForActive(),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new EngineError(ErrorCode.GRACEFUL_STOP_TIMEOUT, `graceful stop timed out after ${timeout}ms`)), timeout)),
-      ])
+      let timer: ReturnType<typeof setTimeout> | undefined
+      try {
+        await Promise.race([
+          dispatcher.waitForActive(),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new EngineError(ErrorCode.GRACEFUL_STOP_TIMEOUT, `graceful stop timed out after ${timeout}ms`)), timeout)
+          }),
+        ])
+      } catch (err) {
+        timedOut = err as EngineError
+        bus.abortAll('stop', 'engine stopped')
+        await dispatcher.waitForActive()
+      } finally {
+        if (timer) clearTimeout(timer)
+      }
     } else {
       bus.abortAll('stop', 'engine stopped')
       await dispatcher.waitForActive()
@@ -583,6 +609,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     observability?.close()
     observability = null
     close?.()
+    if (timedOut) throw timedOut
   }
 
   async function drain(timeoutMs = 30_000): Promise<void> {

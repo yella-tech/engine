@@ -30,6 +30,8 @@ export const ErrorCode = {
   RUN_NOT_FOUND: 'RUN_NOT_FOUND',
   /** An operation was attempted on a run in an invalid state. */
   INVALID_RUN_STATE: 'INVALID_RUN_STATE',
+  /** An effect with this key is recorded as in progress from an earlier attempt; the run is dead-lettered without further retries so an operator can repair it. */
+  EFFECT_IN_PROGRESS: 'EFFECT_IN_PROGRESS',
   /** An engine configuration option has an invalid value. */
   INVALID_CONFIG: 'INVALID_CONFIG',
 } as const
@@ -553,8 +555,10 @@ export type RunStore = {
   getByStatusPaginated?(status: RunStatus, limit: number, offset: number, opts?: RunQueryOptions): { runs: Run[]; total: number }
   /** Check whether any runs exist in a given state without loading them. */
   hasState?(state: ProcessState): boolean
-  /** Delete completed non-deferred runs older than the cutoff. Returns the deleted run IDs. */
-  pruneCompletedBefore?(cutoffMs: number): string[]
+  /** Earliest `retryAfter` among idle runs that are backing off, or `null` if none. Used to schedule wake-ups. */
+  nextRetryAt?(): number | null
+  /** Delete completed non-deferred runs older than the cutoff. When `onlyRunIds` is given, prune only those IDs (still subject to eligibility). Returns the deleted run IDs. */
+  pruneCompletedBefore?(cutoffMs: number, onlyRunIds?: string[]): string[]
   /** Return IDs of completed runs eligible for pruning (read-only, does not delete). */
   getCandidatesForPrune?(cutoffMs: number): string[]
   /** Close the underlying storage connection, if applicable. */
@@ -565,8 +569,8 @@ export type RunStore = {
  * Configuration options for {@link Engine | createEngine}.
  */
 export type EngineOptions = {
-  /** Storage backend: `'memory'` (default) or SQLite with a file path. */
-  store?: 'memory' | { type: 'sqlite'; path: string }
+  /** Storage backend: `'memory'` / `{ type: 'memory' }` (default) or SQLite with a file path. */
+  store?: 'memory' | { type: 'memory' } | { type: 'sqlite'; path: string }
   /** Maximum number of runs executed concurrently. @defaultValue 10 */
   concurrency?: number
   /** Maximum depth of chained event chains. @defaultValue 10 */
@@ -606,6 +610,14 @@ export type EngineOptions = {
   onRunStart?: (run: Run) => void
   /** Called when a run finishes, regardless of outcome (`completed` or `errored`). */
   onRunFinish?: (run: Run) => void
+  /**
+   * Called when the engine has no running runs and nothing claimable right now.
+   * `nextWakeAt` is the epoch-ms time of the earliest pending retry, or `null`
+   * when nothing is scheduled. Hosts that sleep the process (serverless, Sprites)
+   * can use it to arrange an external wake-up; the engine also schedules its own
+   * in-process timer for the same moment.
+   */
+  onIdle?: (nextWakeAt: number | null) => void
   /** Called when a run transitions to `errored`. */
   onRunError?: (run: Run, error: string) => void
   /** Lease duration in milliseconds for crash recovery. @defaultValue 30000 */
@@ -1124,6 +1136,8 @@ export type DevServerOptions = {
   host?: string
   /** Port to bind to. Use `0` for OS-assigned. @defaultValue 3000 */
   port?: number
+  /** Hono middleware installed before the engine routes, e.g. authentication. Runs for every request including the dashboard. */
+  middleware?: import('hono').MiddlewareHandler[]
 }
 
 /**

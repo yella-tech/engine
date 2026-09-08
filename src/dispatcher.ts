@@ -21,6 +21,7 @@ export function createDispatcher(
   leaseOpts?: LeaseOpts,
   onInternalError?: (error: unknown, context: string) => void,
   abortRun?: (runId: string, message: string) => void,
+  onIdle?: (nextWakeAt: number | null) => void,
 ): Dispatcher {
   let active = 0
   let paused = false
@@ -29,6 +30,8 @@ export function createDispatcher(
   const scheduledTimers = new Set<ReturnType<typeof setTimeout>>()
   let backoffMs = 0
   const MAX_BACKOFF = 30_000
+  let wakeTimer: ReturnType<typeof setTimeout> | null = null
+  let wakeAt = Infinity
 
   function notifyDrain(fns: (() => void)[]) {
     for (const fn of fns) {
@@ -54,9 +57,40 @@ export function createDispatcher(
       clearTimeout(timer)
     }
     scheduledTimers.clear()
+    wakeTimer = null
+    wakeAt = Infinity
   }
 
-  function fillSlots() {
+  /** Ensure a single wake-up timer exists for `at` (or earlier). */
+  function ensureWake(at: number) {
+    if (wakeTimer && wakeAt <= at) return
+    if (wakeTimer) {
+      clearTimeout(wakeTimer)
+      scheduledTimers.delete(wakeTimer)
+    }
+    wakeAt = at
+    wakeTimer = schedule(Math.max(0, at - Date.now()), () => {
+      wakeTimer = null
+      wakeAt = Infinity
+      if (!paused) fillSlots()
+    })
+  }
+
+  /** Report idleness when nothing is running and nothing is claimable right now. */
+  function reportIdle(fromRunFinish: boolean) {
+    if (active !== 0) return
+    const next = runStore.nextRetryAt?.() ?? null
+    if (next !== null) ensureWake(next)
+    if (fromRunFinish || next !== null) {
+      try {
+        onIdle?.(next)
+      } catch (err) {
+        onInternalError?.(err, 'onIdle')
+      }
+    }
+  }
+
+  function fillSlots(fromRunFinish = false) {
     if (paused) return
 
     try {
@@ -85,53 +119,53 @@ export function createDispatcher(
           heartbeatTimers.set(runId, timer)
         }
 
-        executeRun(claimed[0]).finally(() => {
-          const timer = heartbeatTimers.get(runId)
-          if (timer) {
-            clearInterval(timer)
-            heartbeatTimers.delete(runId)
-          }
+        executeRun(claimed[0])
+          .finally(() => {
+            const timer = heartbeatTimers.get(runId)
+            if (timer) {
+              clearInterval(timer)
+              heartbeatTimers.delete(runId)
+            }
 
-          active--
+            active--
 
-          if (!paused) {
-            try {
-              const finished = runStore.get(runId)
-              if (finished && finished.state === 'idle' && finished.retryAfter !== null) {
-                const delayMs = Math.max(0, finished.retryAfter - Date.now())
-                if (delayMs > 0) {
-                  schedule(delayMs, () => {
-                    if (!paused) fillSlots()
-                  })
+            if (!paused) {
+              try {
+                const finished = runStore.get(runId)
+                if (finished && finished.state === 'idle' && finished.retryAfter !== null && finished.retryAfter > Date.now()) {
+                  ensureWake(finished.retryAfter)
                 }
+              } catch (err) {
+                onInternalError?.(err, 'retrySchedule')
               }
+            }
+
+            if (paused) {
+              if (active === 0) {
+                const fns = drainFns
+                drainFns = []
+                notifyDrain(fns)
+              }
+              return
+            }
+
+            try {
+              const noIdle = runStore.hasState ? !runStore.hasState('idle') : runStore.getByState('idle').length === 0
+              if (active === 0 && noIdle) {
+                const fns = drainFns
+                drainFns = []
+                notifyDrain(fns)
+              }
+              fillSlots(true)
             } catch (err) {
-              onInternalError?.(err, 'retrySchedule')
+              onInternalError?.(err, 'fillSlots')
             }
-          }
-
-          if (paused) {
-            if (active === 0) {
-              const fns = drainFns
-              drainFns = []
-              notifyDrain(fns)
-            }
-            return
-          }
-
-          try {
-            const noIdle = runStore.hasState ? !runStore.hasState('idle') : runStore.getByState('idle').length === 0
-            if (active === 0 && noIdle) {
-              const fns = drainFns
-              drainFns = []
-              notifyDrain(fns)
-            }
-            fillSlots()
-          } catch (err) {
-            onInternalError?.(err, 'fillSlots')
-          }
-        })
+          })
+          .catch((err) => {
+            onInternalError?.(err, 'executeRun')
+          })
       }
+      reportIdle(fromRunFinish)
     } catch (err) {
       onInternalError?.(err, 'fillSlots')
       backoffMs = Math.min(MAX_BACKOFF, Math.max(1000, backoffMs * 2))

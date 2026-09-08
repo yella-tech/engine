@@ -4,7 +4,12 @@ export function createEffectStore(): EffectStore {
   const effects = new Map<string, Map<string, EffectRecord>>()
 
   function getEffect(runId: string, effectKey: string): EffectRecord | null {
-    return effects.get(runId)?.get(effectKey) ?? null
+    const record = effects.get(runId)?.get(effectKey)
+    return record ? cloneRecord(record) : null
+  }
+
+  function cloneRecord(record: EffectRecord): EffectRecord {
+    return { ...record, output: structuredClone(record.output) }
   }
 
   function markStarted(runId: string, effectKey: string): void {
@@ -24,7 +29,7 @@ export function createEffectStore(): EffectStore {
     const record = effects.get(runId)?.get(effectKey)
     if (!record) return
     record.state = 'completed'
-    record.output = output
+    record.output = structuredClone(output)
     record.completedAt = Date.now()
   }
 
@@ -38,7 +43,7 @@ export function createEffectStore(): EffectStore {
 
   function getEffects(runId: string): EffectRecord[] {
     const inner = effects.get(runId)
-    return inner ? Array.from(inner.values()) : []
+    return inner ? Array.from(inner.values(), cloneRecord) : []
   }
 
   function clearStartedEffects(runId: string): number {

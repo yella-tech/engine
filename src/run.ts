@@ -375,6 +375,14 @@ export function createRunStore(): RunStore {
     return false
   }
 
+  function nextRetryAt(): number | null {
+    let min: number | null = null
+    for (const run of runs.values()) {
+      if (run.state === 'idle' && run.retryAfter !== null && (min === null || run.retryAfter < min)) min = run.retryAfter
+    }
+    return min
+  }
+
   function paginateRuns(list: Run[], limit: number, offset: number, opts?: RunQueryOptions): { runs: Run[]; total: number } {
     const order = opts?.order ?? 'desc'
     let filtered = opts?.root ? list.filter((run) => run.parentRunId === null) : list
@@ -438,8 +446,9 @@ export function createRunStore(): RunStore {
     return candidateIds
   }
 
-  function pruneCompletedBefore(cutoffMs: number): string[] {
-    const prunedIds = new Set<string>(getCandidatesForPrune(cutoffMs))
+  function pruneCompletedBefore(cutoffMs: number, onlyRunIds?: string[]): string[] {
+    const allowed = onlyRunIds ? new Set(onlyRunIds) : null
+    const prunedIds = new Set<string>(getCandidatesForPrune(cutoffMs).filter((id) => !allowed || allowed.has(id)))
 
     if (prunedIds.size === 0) return []
 
@@ -486,6 +495,7 @@ export function createRunStore(): RunStore {
     setHandlerVersion,
     countByState,
     hasState,
+    nextRetryAt,
     getByStatePaginated,
     getByStatusPaginated,
     pruneCompletedBefore,

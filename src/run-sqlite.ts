@@ -266,14 +266,17 @@ const migrations: ((db: Database.Database) => void)[] = [
   },
 ]
 
-function applyMigrations(db: Database.Database) {
+/** Apply pending schema migrations. `steps` is injectable for tests; production always uses `migrations`. */
+export function applyMigrations(db: Database.Database, steps: ((db: Database.Database) => void)[] = migrations) {
   const currentVersion = db.pragma('user_version', { simple: true }) as number
-  for (let i = currentVersion; i < migrations.length; i++) {
-    migrations[i](db)
-  }
-  if (currentVersion < migrations.length) {
-    db.pragma(`user_version = ${migrations.length}`)
-  }
+  if (currentVersion >= steps.length) return
+  // One transaction for the whole upgrade: a crash mid-way leaves the schema and user_version exactly as they were.
+  db.transaction(() => {
+    for (let i = currentVersion; i < steps.length; i++) {
+      steps[i](db)
+    }
+    db.pragma(`user_version = ${steps.length}`)
+  })()
 }
 
 const DEFERRED_MARKER_PREDICATE = ["coalesce(CAST(json_extract(result, '$.deferred') AS INTEGER), 0) = 1", "coalesce(json_type(result, '$.triggerEvent'), '') = 'text'"].join(' AND ')
@@ -336,6 +339,7 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     setHandlerVersion: db.prepare('UPDATE runs SET handler_version = ? WHERE id = ?'),
     countByState: db.prepare('SELECT COUNT(*) as cnt FROM runs WHERE state = ?'),
     hasState: db.prepare('SELECT 1 FROM runs WHERE state = ? LIMIT 1'),
+    nextRetryAt: db.prepare("SELECT MIN(retry_after) as next FROM runs WHERE state = 'idle' AND retry_after IS NOT NULL"),
     paginatedByStateDesc: db.prepare('SELECT * FROM runs WHERE state = ? ORDER BY started_at DESC LIMIT ? OFFSET ?'),
     paginatedByStateAsc: db.prepare('SELECT * FROM runs WHERE state = ? ORDER BY started_at ASC LIMIT ? OFFSET ?'),
     paginatedAllDesc: db.prepare('SELECT * FROM runs ORDER BY started_at DESC LIMIT ? OFFSET ?'),
@@ -686,6 +690,11 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     return stmts.hasState.get(state) !== undefined
   }
 
+  function nextRetryAt(): number | null {
+    const row = stmts.nextRetryAt.get() as { next: number | null } | undefined
+    return row?.next ?? null
+  }
+
   function getStatePageStatement(state: ProcessState | null, order: RunSortOrder, root: boolean) {
     if (state && root) return order === 'asc' ? stmts.paginatedByStateRootAsc : stmts.paginatedByStateRootDesc
     if (state) return order === 'asc' ? stmts.paginatedByStateAsc : stmts.paginatedByStateDesc
@@ -846,13 +855,19 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     return candidates.filter((run) => run.childRunIds.every(isChildArchivable)).map((run) => run.id)
   }
 
-  function pruneCompletedBefore(cutoffMs: number): string[] {
+  function pruneCompletedBefore(cutoffMs: number, onlyRunIds?: string[]): string[] {
+    const allowed = onlyRunIds ? new Set(onlyRunIds) : null
     const pruneTransaction = db.transaction(() => {
       const candidateRows = stmts.pruneCompletedCandidates.all(cutoffMs) as RunRow[]
       const candidates = candidateRows.map(rowToRun).filter((run) => !isDeferredRun(run))
       if (candidates.length === 0) return []
 
-      const prunedIds = new Set(candidates.filter((run) => run.childRunIds.every(isChildArchivable)).map((run) => run.id))
+      const prunedIds = new Set(
+        candidates
+          .filter((run) => run.childRunIds.every(isChildArchivable))
+          .map((run) => run.id)
+          .filter((id) => !allowed || allowed.has(id)),
+      )
 
       if (prunedIds.size === 0) return []
 
@@ -927,6 +942,7 @@ function createSqliteRunStoreFromDb(db: Database.Database): RunStore {
     setHandlerVersion,
     countByState,
     hasState,
+    nextRetryAt,
     getByStatePaginated,
     getByStatusPaginated,
     pruneCompletedBefore,

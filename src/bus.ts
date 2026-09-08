@@ -46,8 +46,10 @@ export function createBus(registry: Registry, runStore: RunStore, opts: BusOptio
         parentDepth = parent.depth
         if (parentDepth + 1 > opts.maxChainDepth) {
           if (parent.state === 'running') {
-            runStore.setResult(parentRunId, { success: false, error: 'max chain depth exceeded', errorCode: ErrorCode.CHAIN_DEPTH_EXCEEDED })
-            runStore.transition(parentRunId, 'errored', { error: 'max chain depth exceeded' })
+            const error = 'max chain depth exceeded'
+            runStore.setResult(parentRunId, { success: false, error, errorCode: ErrorCode.CHAIN_DEPTH_EXCEEDED })
+            runStore.transition(parentRunId, 'errored', { error })
+            opts.emitEvent({ type: 'run:error', run: runStore.get(parentRunId)!, error, durationMs: Date.now() - parent.startedAt })
           }
           return []
         }
@@ -144,7 +146,7 @@ export function createBus(registry: Registry, runStore: RunStore, opts: BusOptio
           return existing.output as R
         }
         if (existing && existing.state === 'started') {
-          throw new EngineError(ErrorCode.INVALID_RUN_STATE, `Effect already in progress: ${effectKey}`)
+          throw new EngineError(ErrorCode.EFFECT_IN_PROGRESS, `Effect already in progress: ${effectKey}`)
         }
 
         opts.effectStore.markStarted(run.id, effectKey)
@@ -225,8 +227,9 @@ export function createBus(registry: Registry, runStore: RunStore, opts: BusOptio
       const errorCode = err instanceof EngineError ? err.code : err instanceof RunAbortError ? err.code : undefined
       const retryPolicy = def.retry ?? opts.defaultRetry
       const attempt = current!.attempt
+      const retryable = errorCode !== ErrorCode.EFFECT_IN_PROGRESS
 
-      if (retryPolicy && attempt < retryPolicy.maxRetries) {
+      if (retryPolicy && retryable && attempt < retryPolicy.maxRetries) {
         const delaySpec = retryPolicy.delay ?? 1000
         const delayMs = typeof delaySpec === 'function' ? delaySpec(attempt) : delaySpec
         runStore.prepareRetry(run.id, Date.now() + delayMs)

@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **`onIdle` hook**: `EngineOptions.onIdle(nextWakeAt)` fires when no runs are active and nothing is claimable right now, with the epoch-ms time of the earliest pending retry (or `null`). Lets hosts that sleep the process (serverless, Fly Sprites) arrange an external wake-up.
+- **`RunStore.nextRetryAt()`**: optional store method returning the earliest `retryAfter` among idle runs. Implemented by both built-in stores.
+- **`DevServerOptions.middleware`** / `createDevServer(engine, { middleware })`: Hono middleware installed before the engine routes, so authentication can be added without composing the app by hand.
+- **`ErrorCode.EFFECT_IN_PROGRESS`**: replaces `INVALID_RUN_STATE` for the "effect already in progress" fence.
+
+### Changed
+- **`store: { type: 'memory' }` now means the in-memory store.** It was never part of the declared type, but untyped callers could pass it, and it fell through to SQLite with an undefined path, i.e. an anonymous in-memory SQLite database with JSON serialisation semantics (Dates became strings). It is now an accepted, typed spelling of `'memory'` and behaves like it. If you relied on the old accidental behaviour, use `{ type: 'sqlite', path: ':memory:' }` instead. `{ type: 'sqlite' }` without a `path` now throws `INVALID_CONFIG`.
+
+### Fixed
+- Delayed retries were stranded after a restart: a run backing off when the process stopped was never rescheduled by the next process until an unrelated emit happened. `start()` now schedules a wake-up for the earliest pending retry.
+- A run that hit the in-progress effect fence was retried until its budget ran out, failing identically each time. It now dead-letters on the first fenced attempt so an operator can repair it.
+- `CHAIN_DEPTH_EXCEEDED` failed the parent run silently. It now emits `run:error`, so `onRunError`, `onRunFinish`, and observability see it like any other failure.
+- Retention could prune a run that only became eligible while `beforePrune` was awaiting, skipping the archive. Pruning is now restricted to the IDs that were offered to the callback.
+- The in-memory effect store kept outputs by reference; mutating a returned value changed what later replays saw. Outputs are now cloned on write and read, matching SQLite semantics.
+- A rejection thrown by the run executor outside its own try block (for example a store failure while resolving the handler) escaped as an unhandled promise rejection, which terminates the process on modern Node. It is now reported through `internal:error` with context `executeRun`.
+- Schema migrations ran outside a transaction and bumped `user_version` only after all pending steps, so a crash mid-upgrade left partial DDL behind and every later start failed. The whole upgrade is now one transaction.
+- `stop({ graceful: true })` leaked its timeout timer and, on timeout, left the engine half-stopped. The timer is cleared, and on timeout the engine aborts stragglers and completes teardown before rethrowing `GRACEFUL_STOP_TIMEOUT`.
+
 ## 0.16.0 - 2026-04-07
 
 ### Changed

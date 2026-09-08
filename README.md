@@ -203,6 +203,26 @@ The dashboard is a Preact app served from built static assets. It includes:
 
 Live invalidation uses SSE plus bounded refresh intervals for heavier views, so the dashboard stays responsive without hammering every endpoint continuously.
 
+The server binds to loopback by default and has no authentication of its own. To expose it beyond localhost, pass Hono middleware that runs before every route, including `/emit` and the operator actions:
+
+```typescript
+const engine = createEngine({
+  server: {
+    host: '0.0.0.0',
+    port: 3400,
+    middleware: [async (c, next) => (c.req.header('authorization') === `Bearer ${process.env.TOKEN}` ? next() : c.text('unauthorized', 401))],
+  },
+})
+```
+
+If the host may put the process to sleep (serverless, Fly Sprites), `onIdle` reports when the engine has nothing to do and when it next needs to be awake:
+
+```typescript
+const engine = createEngine({
+  onIdle: (nextWakeAt) => scheduleExternalWake(nextWakeAt), // epoch ms, or null when nothing is pending
+})
+```
+
 See the full dashboard guide and route reference:
 
 - [Dashboard](https://yella.tech/engine/docs/dashboard)

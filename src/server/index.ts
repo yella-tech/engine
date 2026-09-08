@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { Hono } from 'hono'
+import type { MiddlewareHandler } from 'hono'
 import type { Context } from 'hono'
 import { serve } from '@hono/node-server'
 import type { DevServer } from '../types.js'
@@ -154,8 +155,9 @@ function safeReadDir(dir: string): string[] {
  * The returned server is not listening until {@link DevServer.serve} is called.
  * Pass `dashboardFallback: false` when composing your own dashboard mounting.
  */
-export function createDevServer(engine: RoutableEngine, opts?: { dashboardFallback?: boolean; uiDir?: string }): DevServer {
+export function createDevServer(engine: RoutableEngine, opts?: { dashboardFallback?: boolean; uiDir?: string; middleware?: MiddlewareHandler[] }): DevServer {
   const app = new Hono()
+  for (const mw of opts?.middleware ?? []) app.use('*', mw)
   createEngineApi(engine, app)
   if (opts?.dashboardFallback !== false) {
     installDashboardFallback(app, opts?.uiDir ?? resolveEngineUiDir())
